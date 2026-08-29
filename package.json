@@ -1,0 +1,23 @@
+{
+  "name": "8efendi",
+  "version": "2.0.0",
+  "description": "2D Çok Oyunculu (WebRTC P2P) Strateji ve Grup Yönetim Oyunu",
+  "main": "index.html",
+  "type": "module",
+  "scripts": {
+    "start": "npx serve . -l 3000",
+    "dev": "npx serve . -l 3000"
+  },
+  "keywords": [
+    "strategy",
+    "rts",
+    "multiplayer",
+    "webrtc",
+    "p2p",
+    "peerjs",
+    "canvas",
+    "game"
+  ],
+  "author": "muratev3406-jpg",
+  "license": "MIT"
+}

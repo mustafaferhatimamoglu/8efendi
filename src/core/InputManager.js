@@ -1,4 +1,4 @@
-﻿import { Vector2D } from '../navigation/Vector2D.js';
+import { Vector2D } from '../navigation/Vector2D.js';
 
 export class InputManager {
   constructor(canvas, partyManager) {
@@ -8,6 +8,7 @@ export class InputManager {
     this.isDragging = false;
     this.dragStart = new Vector2D(0, 0);
     this.dragEnd = new Vector2D(0, 0);
+    this.mousePos = new Vector2D(0, 0);
 
     this.bindEvents();
   }
@@ -19,6 +20,7 @@ export class InputManager {
       const rect = this.canvas.getBoundingClientRect();
       const mouseX = e.clientX - rect.left;
       const mouseY = e.clientY - rect.top;
+      this.mousePos.set(mouseX, mouseY);
 
       if (e.button === 0) {
         // Sol tık - Seçim & Sürükleme Başlangıcı
@@ -26,15 +28,44 @@ export class InputManager {
         this.dragStart.set(mouseX, mouseY);
         this.dragEnd.set(mouseX, mouseY);
       } else if (e.button === 2) {
-        // Sağ tık - Hedefe Hareket Komutu
-        this.party.commandMove(new Vector2D(mouseX, mouseY));
+        // Sağ tık - Hedefe Hareket veya Düşmana Saldırı Komutu
+        const clickedEnemy = this.party.getEnemyUnits().find(u => {
+          return !u.isDead && u.position.dist(this.mousePos) <= u.radius + 10;
+        });
+
+        if (clickedEnemy) {
+          // Düşmana saldırı emri
+          this.party.commandAttack(clickedEnemy);
+        } else {
+          // Boş alana formasyon hareketi emri
+          this.party.commandMove(new Vector2D(mouseX, mouseY));
+        }
       }
     });
 
     window.addEventListener('mousemove', e => {
-      if (!this.isDragging) return;
       const rect = this.canvas.getBoundingClientRect();
-      this.dragEnd.set(e.clientX - rect.left, e.clientY - rect.top);
+      const mouseX = e.clientX - rect.left;
+      const mouseY = e.clientY - rect.top;
+      this.mousePos.set(mouseX, mouseY);
+
+      // Sürükleme güncellemesi
+      if (this.isDragging) {
+        this.dragEnd.set(mouseX, mouseY);
+      }
+
+      // Düşman hedefleme hover imleci
+      let hoveringEnemy = false;
+      this.party.getEnemyUnits().forEach(u => {
+        if (!u.isDead && u.position.dist(this.mousePos) <= u.radius + 10) {
+          u.isTargetedByHover = true;
+          hoveringEnemy = true;
+        } else {
+          u.isTargetedByHover = false;
+        }
+      });
+
+      this.canvas.style.cursor = hoveringEnemy ? 'crosshair' : 'default';
     });
 
     window.addEventListener('mouseup', e => {
@@ -43,7 +74,7 @@ export class InputManager {
         const dist = this.dragStart.dist(this.dragEnd);
 
         if (dist > 8) {
-          // Kutu Seçimi (Box Select)
+          // Kutu Seçimi (Box Select) - Yalnızca dost birimleri seçer
           const minX = Math.min(this.dragStart.x, this.dragEnd.x);
           const maxX = Math.max(this.dragStart.x, this.dragEnd.x);
           const minY = Math.min(this.dragStart.y, this.dragEnd.y);
@@ -51,14 +82,15 @@ export class InputManager {
           this.party.selectInRect(minX, minY, maxX, maxY);
         } else {
           // Tekil Tık Seçimi
-          const clickedUnit = this.party.getAllUnits().find(u => {
-            return u.position.dist(this.dragStart) <= u.radius + 6;
+          const allUnits = this.party.getAllFieldUnits();
+          const clickedUnit = allUnits.find(u => {
+            return !u.isDead && u.position.dist(this.dragStart) <= u.radius + 8;
           });
 
           if (clickedUnit) {
             this.party.selectUnit(clickedUnit, e.shiftKey);
           } else if (!e.shiftKey) {
-            // Boşluğa tıklandıysa ve shift yoksa seçimi temizle
+            // Boşluğa tıklandıysa seçimi temizle
             this.party.clearSelection();
           }
         }
@@ -67,6 +99,11 @@ export class InputManager {
 
     // Klavye kısayolları
     window.addEventListener('keydown', e => {
+      // Eğer kullanıcı metin kutusuna yazıyorsa kısayolları tetikleme
+      if (e.target.tagName === 'INPUT' || e.target.tagName === 'TEXTAREA') {
+        return;
+      }
+
       if (e.key >= '1' && e.key <= '8') {
         const index = parseInt(e.key) - 1;
         const units = this.party.getAllUnits();
@@ -76,10 +113,11 @@ export class InputManager {
       } else if (e.key.toLowerCase() === 'a') {
         this.party.selectAll();
       } else if (e.key.toLowerCase() === 'q') {
-        // İlk seçili birimin yeteneğini kullan
+        // Seçili birimlerin yeteneklerini hedef noktaya doğru kullan
         const selected = this.party.getSelectedUnits();
         if (selected.length > 0) {
-          selected[0].useSkill(0, selected[0].position);
+          const caster = selected[0];
+          caster.useSkill(0, this.mousePos.clone());
         }
       }
     });
