@@ -1,4 +1,4 @@
-﻿import { Unit } from './Unit.js';
+import { Unit } from './Unit.js';
 import { EFENDI_DATA } from '../config/UnitDatabase.js';
 import { FormationManager, FormationType } from '../navigation/FormationManager.js';
 import { Vector2D } from '../navigation/Vector2D.js';
@@ -180,6 +180,30 @@ export class PartyManager {
         unit.position.y <= maxY &&
         !unit.isDead
       ) {
+        unit.isSelected = true;
+        this.selectedUnits.push(unit);
+      }
+    });
+    EventBus.emit('selection:changed', this.selectedUnits);
+  }
+
+  selectGuardians() {
+    this.clearSelection();
+    this.units.forEach(unit => {
+      // 1 ve 2 numaralı Muhafızlar (veya GUARDIAN sınıfı)
+      if (!unit.isDead && (unit.classType === 'guardian' || unit.id === 1 || unit.id === 2)) {
+        unit.isSelected = true;
+        this.selectedUnits.push(unit);
+      }
+    });
+    EventBus.emit('selection:changed', this.selectedUnits);
+  }
+
+  selectBackline() {
+    this.clearSelection();
+    this.units.forEach(unit => {
+      // 3'ten 8'e kadar olan diğer karakterler (Okçular, Büyücüler, Şifacılar)
+      if (!unit.isDead && unit.classType !== 'guardian' && unit.id !== 1 && unit.id !== 2) {
         unit.isSelected = true;
         this.selectedUnits.push(unit);
       }

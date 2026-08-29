@@ -104,7 +104,16 @@ export class InputManager {
         return;
       }
 
-      if (e.key >= '1' && e.key <= '8') {
+      // 1: Muhafızları Seç (Muhafız-1 ve Muhafız-2)
+      if (e.key === '1') {
+        this.party.selectGuardians();
+      }
+      // 2: Diğer Karakterleri Seç (Okçular, Büyücüler, Şifacılar)
+      else if (e.key === '2') {
+        this.party.selectBackline();
+      }
+      // 3 - 8: İlgili tekil karakteri seç
+      else if (e.key >= '3' && e.key <= '8') {
         const index = parseInt(e.key) - 1;
         const units = this.party.getAllUnits();
         if (units[index]) {
@@ -112,13 +121,6 @@ export class InputManager {
         }
       } else if (e.key.toLowerCase() === 'a') {
         this.party.selectAll();
-      } else if (e.key.toLowerCase() === 'q') {
-        // Seçili birimlerin yeteneklerini hedef noktaya doğru kullan
-        const selected = this.party.getSelectedUnits();
-        if (selected.length > 0) {
-          const caster = selected[0];
-          caster.useSkill(0, this.mousePos.clone());
-        }
       }
     });
   }
