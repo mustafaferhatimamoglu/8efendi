@@ -1,5 +1,3 @@
-﻿import { PacketType } from './MultiplayerSync.js';
-
 export const CoOpPacketType = {
   HANDSHAKE: 'handshake',
   PEER_MOVE: 'peer_move',
