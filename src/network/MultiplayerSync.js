@@ -1,3 +1,5 @@
+﻿import { PacketType } from './MultiplayerSync.js';
+
 export const CoOpPacketType = {
   HANDSHAKE: 'handshake',
   PEER_MOVE: 'peer_move',
@@ -12,7 +14,7 @@ export class MultiplayerSync {
     this.engine = engine;
     this.network = networkManager;
     this.snapshotTimer = 0;
-    this.snapshotInterval = 0.12; // 120ms aralıklarla durum güncellemesi
+    this.snapshotInterval = 0.08; // 80ms aralıklarla kesintisiz senkronizasyon
     this.active = false;
 
     this.bindNetworkEvents();
@@ -142,22 +144,32 @@ export class MultiplayerSync {
     if (this.network.isHost || !packet.enemies) return;
 
     const currentEnemies = this.engine.partyManager.enemyUnits;
+    const receivedIds = new Set(packet.enemies.map(e => e.id));
 
+    // 1. Host tarafında ölmüş/silinmiş düşmanları Client'ta da temizle
+    for (let i = currentEnemies.length - 1; i >= 0; i--) {
+      if (!receivedIds.has(currentEnemies[i].id)) {
+        currentEnemies.splice(i, 1);
+      }
+    }
+
+    // 2. Gelen düşmanları güncelle veya oluştur
     packet.enemies.forEach(eData => {
       let enemy = currentEnemies.find(e => e.id === eData.id);
+
       if (!enemy && !eData.isDead) {
-        // Yeni düşman oluştur
+        // Yeni doğan düşmanı oluştur
         enemy = new Unit({
           id: eData.id,
           name: eData.name || 'Düşman',
           title: 'Canavar',
           classType: 'enemy_melee',
-          color: '#7f8c8d',
-          radius: 13,
+          color: eData.color || '#7f8c8d',
+          radius: eData.radius || 14,
           maxHp: eData.maxHp || 100,
-          speed: 3.0,
-          attackPower: 15,
-          attackRange: 30,
+          speed: eData.speed || 3.0,
+          attackPower: eData.attackPower || 15,
+          attackRange: eData.attackRange || 30,
           isEnemy: true,
           x: eData.x,
           y: eData.y,
@@ -168,9 +180,11 @@ export class MultiplayerSync {
       }
 
       if (enemy) {
+        // Konum enterpolasyonu ve durum senkronizasyonu
         enemy.targetInterpolation = { x: eData.x, y: eData.y };
         enemy.hp = eData.hp;
         enemy.isDead = eData.isDead;
+        enemy.facingAngle = eData.facing;
       }
     });
   }
@@ -204,18 +218,25 @@ export class MultiplayerSync {
       timestamp: Date.now()
     });
 
-    // 2. Eğer Host isek Düşmanları da Senkronize Et
+    // 2. Eğer Host isek Düşmanları da Tüm Müttefiklere Kesintisiz Yayınla
     if (this.network.isHost) {
-      const enemiesSnapshot = this.engine.partyManager.enemyUnits.map(e => ({
-        id: e.id,
-        name: e.name,
-        x: Math.round(e.position.x * 10) / 10,
-        y: Math.round(e.position.y * 10) / 10,
-        hp: Math.round(e.hp),
-        maxHp: e.maxHp,
-        isDead: e.isDead,
-        facing: Math.round(e.facingAngle * 100) / 100
-      }));
+      const enemiesSnapshot = this.engine.partyManager.enemyUnits
+        .filter(e => !e.isDead)
+        .map(e => ({
+          id: e.id,
+          name: e.name,
+          color: e.color,
+          radius: e.radius,
+          x: Math.round(e.position.x * 10) / 10,
+          y: Math.round(e.position.y * 10) / 10,
+          hp: Math.round(e.hp),
+          maxHp: e.maxHp,
+          speed: e.speed,
+          attackPower: e.attackPower,
+          attackRange: e.attackRange,
+          isDead: e.isDead,
+          facing: Math.round(e.facingAngle * 100) / 100
+        }));
 
       this.network.send({
         type: CoOpPacketType.ENEMY_SNAPSHOT,
