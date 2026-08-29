@@ -1,4 +1,4 @@
-import { Vector2D } from '../navigation/Vector2D.js';
+﻿import { Vector2D } from '../navigation/Vector2D.js';
 
 export class InputManager {
   constructor(canvas, partyManager) {
@@ -35,10 +35,10 @@ export class InputManager {
 
         if (clickedEnemy) {
           // Düşmana saldırı emri
-          this.party.commandAttack(clickedEnemy);
+          this.party.attackTargetWithSelected(clickedEnemy);
         } else {
           // Boş alana formasyon hareketi emri
-          this.party.commandMove(new Vector2D(mouseX, mouseY));
+          this.party.moveSelectedUnits(new Vector2D(mouseX, mouseY));
         }
       }
     });
@@ -99,7 +99,6 @@ export class InputManager {
 
     // Klavye kısayolları
     window.addEventListener('keydown', e => {
-      // Eğer kullanıcı metin kutusuna yazıyorsa kısayolları tetikleme
       if (e.target.tagName === 'INPUT' || e.target.tagName === 'TEXTAREA') {
         return;
       }
