@@ -1,4 +1,4 @@
-import { FormationManager, FormationType } from '../navigation/FormationManager.js';
+﻿import { FormationManager, FormationType } from '../navigation/FormationManager.js';
 import { Vector2D } from '../navigation/Vector2D.js';
 import { Unit } from './Unit.js';
 import { EFENDI_DATA, AVAILABLE_CLASSES } from '../config/UnitDatabase.js';
@@ -244,7 +244,7 @@ export class PartyManager {
     EventBus.emit('formation:changed', type);
   }
 
-  moveSelectedUnits(targetPos) {
+  moveSelectedUnits(targetPos, customFacingAngle = null) {
     const selected = this.selectedUnits.filter(u => !u.isDead);
     if (selected.length === 0) return;
 
@@ -255,7 +255,7 @@ export class PartyManager {
     selected.forEach(u => center.add(u.position));
     center.div(selected.length);
 
-    let facingAngle = Vector2D.sub(targetPos, center).heading();
+    let facingAngle = customFacingAngle !== null ? customFacingAngle : Vector2D.sub(targetPos, center).heading();
     if (isNaN(facingAngle)) facingAngle = 0;
 
     const slots = FormationManager.calculateFormationSlots(
@@ -269,6 +269,7 @@ export class PartyManager {
     const assignments = FormationManager.assignSlotsOptimally(selected, slots);
     assignments.forEach(({ unit, slot }) => {
       unit.moveTo(slot);
+      unit.facingAngle = facingAngle;
     });
 
     if (this.sync && this.sync.active) {
@@ -315,6 +316,7 @@ export class PartyManager {
     const assignments = FormationManager.assignSlotsOptimally(movingUnits, slots);
     assignments.forEach(({ unit, slot }) => {
       unit.moveTo(slot);
+      unit.facingAngle = facingAngle;
     });
   }
 
