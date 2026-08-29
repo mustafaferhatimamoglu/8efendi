@@ -1,4 +1,4 @@
-﻿import { Vector2D } from '../navigation/Vector2D.js';
+import { Vector2D } from '../navigation/Vector2D.js';
 import { StateMachine } from '../fsm/StateMachine.js';
 import { IdleState } from '../fsm/states/IdleState.js';
 import { MoveState } from '../fsm/states/MoveState.js';
@@ -29,15 +29,15 @@ export class Unit {
     this.maxForce = 0.4;
     this.attackPower = config.attackPower || 20;
 
-    // Sınıfa göre menzil ve saldırı hızı (1.0s bekleme süresi)
+    // Sınıfa göre menzil (Uzaktan vuranlar için 5 katına çıkarıldı)
     if (this.classType === UnitClasses.ARCHER) {
-      this.attackRange = 170;
+      this.attackRange = config.attackRange || 800; // Okçu 5x Menzil
     } else if (this.classType === UnitClasses.MAGE) {
-      this.attackRange = 160;
+      this.attackRange = config.attackRange || 750; // Büyücü 5x Menzil
     } else if (this.classType === UnitClasses.HEALER) {
-      this.attackRange = 140;
+      this.attackRange = config.attackRange || 650; // Şifacı 5x Şifa Menzili
     } else {
-      this.attackRange = config.attackRange || 36; // Yakın dövüş
+      this.attackRange = config.attackRange || 40; // Yakın dövüş (Muhafız / Canavar)
     }
 
     this.attackSpeed = 1.0; // Saniyede 1 vuruş (1.0s cooldown)
