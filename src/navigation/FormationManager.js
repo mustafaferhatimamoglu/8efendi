@@ -79,4 +79,37 @@ export class FormationManager {
 
     return slots;
   }
+
+  /**
+   * Birimleri en yakın slotlara eşleştirir.
+   */
+  static assignSlotsOptimally(units, slots) {
+    const assignments = [];
+    const availableSlots = [...slots];
+
+    units.forEach(unit => {
+      let closestSlot = null;
+      let minDistance = Infinity;
+      let closestIndex = -1;
+
+      availableSlots.forEach((slot, index) => {
+        const dist = unit.position.dist(slot);
+        if (dist < minDistance) {
+          minDistance = dist;
+          closestSlot = slot;
+          closestIndex = index;
+        }
+      });
+
+      if (closestSlot) {
+        assignments.push({ unit, slot: closestSlot });
+        availableSlots.splice(closestIndex, 1);
+      } else {
+        // Slot kalmadıysa hedef pozisyonu doğrudan ver
+        assignments.push({ unit, slot: unit.position });
+      }
+    });
+
+    return assignments;
+  }
 }
