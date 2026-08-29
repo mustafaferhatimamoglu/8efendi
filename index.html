@@ -10,11 +10,22 @@
 </head>
 <body>
   <div class="app-container">
-    <!-- Üst Başlık ve Mod Bilgisi -->
+    <!-- Üst Başlık, Formasyon Seçimi ve Mod Bilgisi -->
     <header class="game-header">
       <div class="brand">
         <h1>8EFENDİ</h1>
         <span class="sub">2D PvE Co-op Bozkır Hayatta Kalma</span>
+      </div>
+
+      <!-- ÜSTTEKİ FORMASYON SEÇİM BUTONLARI (Kutu, V-Kama, Çizgi/Hat, Çember) -->
+      <div class="control-group header-formations">
+        <span style="font-weight: bold; color: var(--accent-color);">Formasyon:</span>
+        <div class="btn-group">
+          <button class="form-btn active" data-formation="box" title="Kutu Düzeni (Dengeli Savunma)">📦 Kutu</button>
+          <button class="form-btn" data-formation="wedge" title="V-Kama Düzeni (Hücum Düzeni)">⚡ V-Kama</button>
+          <button class="form-btn" data-formation="line" title="Çizgi / Hat Düzeni (Geniş Barikat)">📏 Çizgi</button>
+          <button class="form-btn" data-formation="circle" title="Daire / Çember Düzeni (360 Koruma)">⭕ Daire</button>
+        </div>
       </div>
 
       <div class="network-badge-group">
@@ -35,22 +46,22 @@
           <span>⌨️ <strong>1:</strong> 2 Muhafızı Seç</span>
           <span>⌨️ <strong>2:</strong> Diğer Karakterleri Seç</span>
           <span>⌨️ <strong>A:</strong> Tümünü Seç</span>
-          <span>🖱️ <strong>Sağ Tık:</strong> Formasyonla Yürü</span>
+          <span>🖱️ <strong>Sağ Tık:</strong> Seçili Formasyonla Yürü</span>
         </div>
 
         <!-- Sohbet Balonları Katmanı -->
         <div id="chat-bubbles-container" class="chat-bubbles-container"></div>
       </div>
 
-      <!-- Yan Panel: Kontroller, Formasyonlar ve Bilgiler -->
+      <!-- Yan Panel: Skor ve Bilgiler -->
       <aside class="sidebar-panel">
         <div class="panel-section">
           <h3>Takım Formasyonu</h3>
           <div class="formation-buttons">
             <button class="form-btn active" data-formation="box" title="Kutu Düzeni (Dengeli)">📦 Kutu</button>
-            <button class="form-btn" data-formation="v_shape" title="V / Kama Düzeni (Hücum)">⚡ V-Kama</button>
-            <button class="form-btn" data-formation="line" title="Hat Düzeni (Geniş Savunma)">📏 Hat</button>
-            <button class="form-btn" data-formation="circle" title="Çember Düzeni (360 Koruma)">⭕ Çember</button>
+            <button class="form-btn" data-formation="wedge" title="V / Kama Düzeni (Hücum)">⚡ V-Kama</button>
+            <button class="form-btn" data-formation="line" title="Çizgi / Hat Düzeni (Geniş Savunma)">📏 Çizgi</button>
+            <button class="form-btn" data-formation="circle" title="Daire / Çember Düzeni (360 Koruma)">⭕ Daire</button>
           </div>
         </div>
 
