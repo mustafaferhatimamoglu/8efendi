@@ -1,4 +1,4 @@
-﻿import { Vector2D } from '../navigation/Vector2D.js';
+import { Vector2D } from '../navigation/Vector2D.js';
 import { StateMachine } from '../fsm/StateMachine.js';
 import { IdleState } from '../fsm/states/IdleState.js';
 import { MoveState } from '../fsm/states/MoveState.js';
@@ -215,11 +215,11 @@ export class Unit {
     });
 
     if (lowestAlly) {
-      const healAmount = 35;
+      const healAmount = 70; // 2 Katına Çıkarıldı (35 -> 70 HP)
       lowestAlly.heal(healAmount);
       this.healBeamTarget = lowestAlly;
-      this.healBeamTimer = 0.4;
-      this.attackCooldown = 1.0; // 1 saniye cooldown
+      this.healBeamTimer = 0.3;
+      this.attackCooldown = 0.5; // Can basma hızı 2 katına çıkarıldı (1.0s -> 0.5s Cooldown)
       this.facingAngle = Vector2D.sub(lowestAlly.position, this.position).heading();
     }
   }
