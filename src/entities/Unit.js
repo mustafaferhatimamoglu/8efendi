@@ -1,4 +1,4 @@
-import { Vector2D } from '../navigation/Vector2D.js';
+﻿import { Vector2D } from '../navigation/Vector2D.js';
 import { StateMachine } from '../fsm/StateMachine.js';
 import { IdleState } from '../fsm/states/IdleState.js';
 import { MoveState } from '../fsm/states/MoveState.js';
@@ -37,7 +37,7 @@ export class Unit {
     } else if (this.classType === UnitClasses.HEALER) {
       this.attackRange = config.attackRange || 650; // Şifacı 5x Şifa Menzili
     } else {
-      this.attackRange = config.attackRange || 40; // Yakın dövüş (Muhafız / Canavar)
+      this.attackRange = config.attackRange || 45; // Yakın dövüş (Muhafız / Canavar)
     }
 
     this.attackSpeed = 1.0; // Saniyede 1 vuruş (1.0s cooldown)
@@ -45,10 +45,14 @@ export class Unit {
     this.skills = config.skills || [];
     this.description = config.description || '';
 
-    // Muhafız (Guardian) Kalkan Yeteneği Değişkenleri
-    // Can yarıya (%50) indiğinde 5 saniyeliğine %75 hasar azaltımı, 10s cooldown
-    this.shieldActiveTimer = 0; // Kalkan kalan aktif süresi (5s)
-    this.shieldCooldown = 0;    // Kalkan bekleme süresi (10s)
+    // Muhafız (Guardian) Kalkan Yeteneği: Can %50 altındayken 5s boyunca %75 hasar koruması, 10s cooldown
+    this.shieldActiveTimer = 0;
+    this.shieldCooldown = 0;
+
+    // Okçu (Archer) & Büyücü (Mage) Hızlı Atış Yeteneği:
+    // 10 saniyede bir saldırı hızını 5 katına çıkaran 5 saniyelik buff (Cooldown 1.0s -> 0.2s)
+    this.rapidFireActiveTimer = 0;
+    this.rapidFireCooldown = 0;
 
     // Pozisyon ve Fizik
     this.position = new Vector2D(config.x || 100, config.y || 100);
@@ -134,10 +138,25 @@ export class Unit {
       this.shieldCooldown -= deltaTime;
     }
 
+    // Okçu & Büyücü Seri Atış Sürelerini Güncelle
+    if (this.rapidFireActiveTimer > 0) {
+      this.rapidFireActiveTimer -= deltaTime;
+    }
+    if (this.rapidFireCooldown > 0) {
+      this.rapidFireCooldown -= deltaTime;
+    }
+
     // Muhafız Can Kontrolü (%50 altına indiğinde otomatik kalkan tetikleme)
     if (this.classType === UnitClasses.GUARDIAN && !this.isDead) {
       if (this.hp <= this.maxHp * 0.5 && this.shieldCooldown <= 0) {
         this.activateGuardianShield();
+      }
+    }
+
+    // Okçu & Büyücü 10 saniyede bir otomatik Seri Saldırı Skill Kontrolü
+    if ((this.classType === UnitClasses.ARCHER || this.classType === UnitClasses.MAGE) && !this.isDead && !this.isEnemy) {
+      if (this.rapidFireCooldown <= 0) {
+        this.activateRapidFire();
       }
     }
 
@@ -166,8 +185,21 @@ export class Unit {
     });
   }
 
+  activateRapidFire() {
+    this.rapidFireActiveTimer = 5.0; // 5 saniye boyunca saldırı hızı 5 katına çıkar
+    this.rapidFireCooldown = 10.0;   // 10 saniye bekleme süresi
+    const skillName = this.classType === UnitClasses.ARCHER ? '🏹 SERİ OK YAĞMURU (5x HIZ)!' : '🔥 KIZIL KASIRGA (5x HIZ)!';
+    this.floatingTexts.push({
+      text: skillName,
+      color: this.classType === UnitClasses.ARCHER ? '#2ecc71' : '#e67e22',
+      x: this.position.x,
+      y: this.position.y - this.radius - 22,
+      alpha: 1.2
+    });
+  }
+
   /**
-   * Otomatik Saldırı ve Şifa Döngüsü (1.0s Cooldown)
+   * Otomatik Saldırı ve Şifa Döngüsü
    */
   updateCombatLoop(deltaTime) {
     if (this.attackCooldown > 0) {
@@ -187,10 +219,8 @@ export class Unit {
     // Saldırı Sınıfları: Düşman Tarama ve Otomatik Saldırı (Menzilde ise)
     if (this.attackCooldown <= 0) {
       if (this.isEnemy) {
-        // Düşman: En yakın oyuncu birimini tara
         this.performEnemyAttack();
       } else {
-        // Oyuncu Birimi: Menzildeki en yakın düşmana saldır
         this.performPlayerAttack();
       }
     }
@@ -215,11 +245,11 @@ export class Unit {
     });
 
     if (lowestAlly) {
-      const healAmount = 70; // 2 Katına Çıkarıldı (35 -> 70 HP)
+      const healAmount = 70;
       lowestAlly.heal(healAmount);
       this.healBeamTarget = lowestAlly;
       this.healBeamTimer = 0.3;
-      this.attackCooldown = 0.5; // Can basma hızı 2 katına çıkarıldı (1.0s -> 0.5s Cooldown)
+      this.attackCooldown = 0.5; // 0.5s Cooldown
       this.facingAngle = Vector2D.sub(lowestAlly.position, this.position).heading();
     }
   }
@@ -246,7 +276,14 @@ export class Unit {
 
     if (closestEnemy) {
       this.executeClassAttack(closestEnemy);
-      this.attackCooldown = 1.0; // 1 saniye cooldown
+
+      // Saldırı bekleme süresi hesaplama:
+      // Okçu veya Büyücü Seri Atış (Rapid Fire) modundaysa saldırı hızı 5 kat artar (1.0s / 5 = 0.2s)
+      if ((this.classType === UnitClasses.ARCHER || this.classType === UnitClasses.MAGE) && this.rapidFireActiveTimer > 0) {
+        this.attackCooldown = 0.2; // 5x Saldırı Hızı
+      } else {
+        this.attackCooldown = 1.0; // Normal Hız
+      }
     }
   }
 
@@ -267,12 +304,10 @@ export class Unit {
 
     if (closestAlly) {
       if (minDist <= this.attackRange) {
-        // Menzilde - Vur
         this.executeClassAttack(closestAlly);
         this.attackCooldown = 1.0;
         this.velocity.mult(0.2);
       } else {
-        // Menzil dışında - Yaklaş
         const dir = Vector2D.sub(closestAlly.position, this.position);
         dir.normalize();
         this.velocity = dir.mult(this.speed);
@@ -300,16 +335,27 @@ export class Unit {
     } else {
       // Yakın Dövüşçüler (Muhafız / Canavar):
       this.meleeHitboxTimer = 0.5;
-      target.takeDamage(this.attackPower, this, true);
 
-      // Muhafız (Guardian) Düşmanı İttirme (Knockback Mekaniği)
       if (this.classType === UnitClasses.GUARDIAN) {
-        const knockbackDir = Vector2D.sub(target.position, this.position);
-        knockbackDir.normalize();
-        const knockbackDist = 45; // 45px geriye fırlat / ittir
-        target.position.x += knockbackDir.x * knockbackDist;
-        target.position.y += knockbackDir.y * knockbackDist;
-        target.velocity.set(knockbackDir.x * 6, knockbackDir.y * 6);
+        // Muhafız: Vurduğu etki alanındaki (menzildeki) BÜTÜN düşmanlara hasar ver ve hepsini ittir!
+        const enemies = this.party.getEnemyUnits();
+        const areaRadius = this.attackRange + 15; // Hitbox alanı içindeki tüm düşmanlar
+
+        enemies.forEach(enemy => {
+          if (!enemy.isDead && this.position.dist(enemy.position) <= areaRadius) {
+            enemy.takeDamage(this.attackPower, this, true);
+
+            // Bütün düşmanları geriye fırlat / ittir
+            const knockbackDir = Vector2D.sub(enemy.position, this.position);
+            knockbackDir.normalize();
+            const knockbackDist = 55; // 55px güçlü geri savurma
+            enemy.position.x += knockbackDir.x * knockbackDist;
+            enemy.position.y += knockbackDir.y * knockbackDist;
+            enemy.velocity.set(knockbackDir.x * 7, knockbackDir.y * 7);
+          }
+        });
+      } else {
+        target.takeDamage(this.attackPower, this, true);
       }
     }
   }
@@ -388,7 +434,7 @@ export class Unit {
     if (this.healBeamTarget && !this.healBeamTarget.isDead && this.healBeamTimer > 0) {
       ctx.save();
       ctx.strokeStyle = '#2ecc71';
-      ctx.lineWidth = 3 * (this.healBeamTimer / 0.4);
+      ctx.lineWidth = 3 * (this.healBeamTimer / 0.3);
       ctx.beginPath();
       ctx.moveTo(this.position.x, this.position.y);
       ctx.lineTo(this.healBeamTarget.position.x, this.healBeamTarget.position.y);
@@ -432,6 +478,18 @@ export class Unit {
       ctx.restore();
     }
 
+    // Okçu & Büyücü Hızlı Atış Efekti (Yeşil/Ateş Işıltısı Çemberi)
+    if (this.rapidFireActiveTimer > 0) {
+      ctx.save();
+      ctx.strokeStyle = this.classType === UnitClasses.ARCHER ? '#2ecc71' : '#e67e22';
+      ctx.lineWidth = 2.5;
+      ctx.setLineDash([3, 2]);
+      ctx.beginPath();
+      ctx.arc(this.position.x, this.position.y, this.radius + 7, 0, Math.PI * 2);
+      ctx.stroke();
+      ctx.restore();
+    }
+
     // Yakın Dövüş Hitbox FX (0.5 sn boyunca hafif saydam kırmızı etki alanı)
     if (this.meleeHitboxTimer > 0) {
       ctx.save();
@@ -445,7 +503,7 @@ export class Unit {
 
       ctx.beginPath();
       ctx.moveTo(0, 0);
-      ctx.arc(0, 0, this.attackRange + 10, -0.65, 0.65);
+      ctx.arc(0, 0, this.attackRange + 15, -0.65, 0.65);
       ctx.closePath();
       ctx.fill();
       ctx.stroke();
