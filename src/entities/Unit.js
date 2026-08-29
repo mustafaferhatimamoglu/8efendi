@@ -1,4 +1,4 @@
-import { Vector2D } from '../navigation/Vector2D.js';
+﻿import { Vector2D } from '../navigation/Vector2D.js';
 import { StateMachine } from '../fsm/StateMachine.js';
 import { IdleState } from '../fsm/states/IdleState.js';
 import { MoveState } from '../fsm/states/MoveState.js';
@@ -44,6 +44,11 @@ export class Unit {
     this.attackCooldown = 0;
     this.skills = config.skills || [];
     this.description = config.description || '';
+
+    // Muhafız (Guardian) Kalkan Yeteneği Değişkenleri
+    // Can yarıya (%50) indiğinde 5 saniyeliğine %75 hasar azaltımı, 10s cooldown
+    this.shieldActiveTimer = 0; // Kalkan kalan aktif süresi (5s)
+    this.shieldCooldown = 0;    // Kalkan bekleme süresi (10s)
 
     // Pozisyon ve Fizik
     this.position = new Vector2D(config.x || 100, config.y || 100);
@@ -121,6 +126,21 @@ export class Unit {
       }
     }
 
+    // Muhafız Kalkan Sürelerini Güncelle
+    if (this.shieldActiveTimer > 0) {
+      this.shieldActiveTimer -= deltaTime;
+    }
+    if (this.shieldCooldown > 0) {
+      this.shieldCooldown -= deltaTime;
+    }
+
+    // Muhafız Can Kontrolü (%50 altına indiğinde otomatik kalkan tetikleme)
+    if (this.classType === UnitClasses.GUARDIAN && !this.isDead) {
+      if (this.hp <= this.maxHp * 0.5 && this.shieldCooldown <= 0) {
+        this.activateGuardianShield();
+      }
+    }
+
     // Otomatik Savaş & Şifacı Döngüsü
     this.updateCombatLoop(deltaTime);
 
@@ -132,6 +152,18 @@ export class Unit {
       this.healBeamTimer -= deltaTime;
       if (this.healBeamTimer <= 0) this.healBeamTarget = null;
     }
+  }
+
+  activateGuardianShield() {
+    this.shieldActiveTimer = 5.0; // 5 saniye boyunca %75 hasar koruması
+    this.shieldCooldown = 10.0;   // 10 saniye bekleme süresi
+    this.floatingTexts.push({
+      text: '🛡️ ÇELİK KALKAN!',
+      color: '#f1c40f',
+      x: this.position.x,
+      y: this.position.y - this.radius - 22,
+      alpha: 1.2
+    });
   }
 
   /**
@@ -266,10 +298,19 @@ export class Unit {
         this.party.projectiles.spawnFireball(this, target, this.attackPower);
       }
     } else {
-      // Yakın Dövüşçüler (Warrior, Berserker, Guardian, Assassin, Tactician, Enemy):
-      // 0.5s süren kırmızı Hitbox FX + Hasar
+      // Yakın Dövüşçüler (Muhafız / Canavar):
       this.meleeHitboxTimer = 0.5;
       target.takeDamage(this.attackPower, this, true);
+
+      // Muhafız (Guardian) Düşmanı İttirme (Knockback Mekaniği)
+      if (this.classType === UnitClasses.GUARDIAN) {
+        const knockbackDir = Vector2D.sub(target.position, this.position);
+        knockbackDir.normalize();
+        const knockbackDist = 45; // 45px geriye fırlat / ittir
+        target.position.x += knockbackDir.x * knockbackDist;
+        target.position.y += knockbackDir.y * knockbackDist;
+        target.velocity.set(knockbackDir.x * 6, knockbackDir.y * 6);
+      }
     }
   }
 
@@ -290,13 +331,20 @@ export class Unit {
 
   takeDamage(amount, sourceUnit = null, broadcast = true) {
     if (this.isDead) return;
-    this.hp = Math.max(0, this.hp - amount);
+
+    // Muhafız Kalkanı Aktifse Hasarı %75 Azalt (Sadece %25 Hasar Alır)
+    let finalDamage = amount;
+    if (this.classType === UnitClasses.GUARDIAN && this.shieldActiveTimer > 0) {
+      finalDamage = amount * 0.25;
+    }
+
+    this.hp = Math.max(0, this.hp - finalDamage);
     this.damageFlash = 0.25;
 
     // Uçuşan hasar yazısı
     this.floatingTexts.push({
-      text: `-${Math.round(amount)}`,
-      color: '#ff4757',
+      text: `-${Math.round(finalDamage)}${this.shieldActiveTimer > 0 ? ' (Zırh)' : ''}`,
+      color: this.shieldActiveTimer > 0 ? '#f39c12' : '#ff4757',
       x: this.position.x + (Math.random() * 14 - 7),
       y: this.position.y - this.radius - 16,
       alpha: 1.0
@@ -368,6 +416,20 @@ export class Unit {
       ctx.stroke();
       ctx.restore();
       return;
+    }
+
+    // Muhafız Kalkan Efekti (Altın Sarısı Koruma Çemberi)
+    if (this.shieldActiveTimer > 0) {
+      ctx.save();
+      ctx.strokeStyle = '#f1c40f';
+      ctx.lineWidth = 3;
+      ctx.beginPath();
+      ctx.arc(this.position.x, this.position.y, this.radius + 8, 0, Math.PI * 2);
+      ctx.stroke();
+
+      ctx.fillStyle = 'rgba(241, 196, 15, 0.18)';
+      ctx.fill();
+      ctx.restore();
     }
 
     // Yakın Dövüş Hitbox FX (0.5 sn boyunca hafif saydam kırmızı etki alanı)
@@ -454,7 +516,7 @@ export class Unit {
     const hpRatio = Math.max(0, this.hp / this.maxHp);
     ctx.fillStyle = this.isEnemy
       ? '#e74c3c'
-      : (hpRatio > 0.5 ? '#2ecc71' : hpRatio > 0.25 ? '#f39c12' : '#e74c3c');
+      : (this.shieldActiveTimer > 0 ? '#f1c40f' : (hpRatio > 0.5 ? '#2ecc71' : hpRatio > 0.25 ? '#f39c12' : '#e74c3c'));
     ctx.fillRect(barX, barY, barWidth * hpRatio, barHeight);
   }
 }
