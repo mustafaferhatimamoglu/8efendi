@@ -1,4 +1,4 @@
-﻿import { FormationManager, FormationType } from '../navigation/FormationManager.js';
+import { FormationManager, FormationType } from '../navigation/FormationManager.js';
 import { Vector2D } from '../navigation/Vector2D.js';
 import { Unit } from './Unit.js';
 import { EFENDI_DATA, AVAILABLE_CLASSES } from '../config/UnitDatabase.js';
@@ -201,7 +201,8 @@ export class PartyManager {
   selectGuardians() {
     this.clearSelection();
     this.units.forEach(unit => {
-      if (!unit.isDead && (unit.classType === 'guardian' || unit.id === 1 || unit.id === 2)) {
+      // SADECE sınıfı Muhafız (guardian) olarak atanan karakterleri seç
+      if (!unit.isDead && unit.classType === 'guardian') {
         unit.isSelected = true;
         this.selectedUnits.push(unit);
       }
@@ -212,7 +213,8 @@ export class PartyManager {
   selectBackline() {
     this.clearSelection();
     this.units.forEach(unit => {
-      if (!unit.isDead && unit.classType !== 'guardian' && unit.id !== 1 && unit.id !== 2) {
+      // Muhafız OLMAYAN diğer tüm atanmış karakterleri seç (Okçu, Büyücü, Şifacı)
+      if (!unit.isDead && unit.classType !== 'guardian') {
         unit.isSelected = true;
         this.selectedUnits.push(unit);
       }
