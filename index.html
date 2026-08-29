@@ -1,9 +1,9 @@
-<!DOCTYPE html>
+﻿<!DOCTYPE html>
 <html lang="tr">
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>8efendi - 2D Çok Oyunculu Strateji & Grup Yönetim Simülatörü</title>
+  <title>8efendi - 2D PvE Co-op Strateji & Hayatta Kalma</title>
   <link rel="stylesheet" href="style.css">
   <!-- PeerJS WebRTC Kütüphanesi (Netlify uyumlu, sunucusuz P2P ağ) -->
   <script src="https://unpkg.com/peerjs@1.5.4/dist/peerjs.min.js"></script>
@@ -14,13 +14,13 @@
     <header class="game-header">
       <div class="brand">
         <h1>8EFENDİ</h1>
-        <span class="sub">2D PvP & Grup Taktik Motoru</span>
+        <span class="sub">PvE Co-op & Bozkır Savunması</span>
       </div>
 
       <!-- Durum ve Skor Rozeti -->
       <div class="status-center">
-        <span id="game-mode-badge" class="badge mode-badge">Tek Oyunculu Mod</span>
-        <span id="score-badge" class="badge score-badge">🔴 Dost: <strong>8/8</strong> | 🔵 Düşman: <strong>8/8</strong></span>
+        <span id="game-mode-badge" class="badge mode-badge">Solo PvE Modu</span>
+        <span id="score-badge" class="badge score-badge">🛡️ Hayatta: <strong>8/8</strong> | 👹 Düşman: <strong>0</strong> | 🌊 Dalga: <strong>1</strong></span>
         <span id="ping-badge" class="badge ping-badge" style="display:none;">📶 0ms</span>
       </div>
 
@@ -36,8 +36,7 @@
         </div>
         <div class="btn-group">
           <button id="btn-select-all" class="action-btn">Tümünü Seç (A)</button>
-          <button id="btn-cast-skill" class="action-btn accent">Yetenek (Q)</button>
-          <button id="btn-open-lobby" class="action-btn lobby-btn">🌐 Çok Oyunculu Lobi</button>
+          <button id="btn-open-lobby" class="action-btn lobby-btn">🌐 Co-op Lobi (1-64 Kişi)</button>
         </div>
       </div>
     </header>
@@ -50,40 +49,44 @@
         <!-- Tuş ve İpucu Yerleşimi -->
         <div class="canvas-overlay-hints">
           <span>🖱️ <strong>Sol Tık + Sürükle:</strong> Birim Seç</span>
-          <span>🖱️ <strong>Sağ Tık (Zemin):</strong> Formasyonla İlerle</span>
-          <span>⚔️ <strong>Sağ Tık (Düşman):</strong> Hücum Et</span>
-          <span>⚡ <strong>Q:</strong> Yetenek Büyüsü</span>
+          <span>🖱️ <strong>Sağ Tık (Zemin):</strong> Formasyonla Yürü</span>
+          <span>🎯 <strong>Otomatik Savaş:</strong> Okçu, Büyücü, Yakın Dövüş ve Şifacı (1.0s)</span>
+          <span>🤝 <strong>Dost Ateşi:</strong> Kapalı</span>
         </div>
 
         <!-- Sohbet Balonları Katmanı -->
         <div id="chat-bubbles-container" class="chat-bubbles-container"></div>
-
-        <!-- Hızlı Savaş Naraları ve Sohbet Barı -->
-        <div class="battle-taunts-bar">
-          <span class="taunt-title">Savaş Naraları:</span>
-          <button class="taunt-btn" data-taunt="Hücuuum! Meydan bizimdir!">⚔️ Hücum!</button>
-          <button class="taunt-btn" data-taunt="Geri çekilin, safı bozmayın!">🛡️ Savunma!</button>
-          <button class="taunt-btn" data-taunt="Turan taktiği uygulayın!">🏹 Turan Taktiği!</button>
-          <button class="taunt-btn" data-taunt="Güzel hamleydi, cenk devam ediyor!">🔥 Helal!</button>
-          <div class="chat-input-wrapper">
-            <input type="text" id="quick-chat-input" placeholder="Mesaj yaz..." maxlength="50">
-            <button id="btn-send-chat">Gönder</button>
-          </div>
-        </div>
       </div>
 
       <aside class="sidebar-panel">
         <div class="panel-section">
-          <h2>Birim Detayları</h2>
+          <h2>Seçili Efendi Bilgisi</h2>
           <div id="selected-info" class="info-content"></div>
         </div>
+
+        <!-- Savaş Naraları & Hızlı Sohbet -->
+        <div class="panel-section taunt-section">
+          <h3>Savaş Naraları</h3>
+          <div class="taunt-btn-grid">
+            <button class="taunt-btn" data-taunt="Hücum! Geri çekilmek yok!">🗡️ Hücum!</button>
+            <button class="taunt-btn" data-taunt="Safları sıklaştırın, formasyonu koruyun!">🛡️ Savunun!</button>
+            <button class="taunt-btn" data-taunt="Okçular geride kalsın!">🏹 Menzile Gir!</button>
+            <button class="taunt-btn" data-taunt="Şifacı arkada kalsın!">✨ Şifa!</button>
+          </div>
+          <div class="quick-chat-row">
+            <input type="text" id="quick-chat-input" placeholder="Müttefiklere mesaj yaz..." maxlength="45">
+            <button id="btn-send-chat" class="action-btn">Gönder</button>
+          </div>
+        </div>
+
         <div class="panel-section help-section">
-          <h3>Taktik Kılavuzu</h3>
+          <h3>Savaş & Sınıf Kuralları</h3>
           <ul>
-            <li><strong>PvP Savaş:</strong> Seçili efendilerinizle rakip birimlere sağ tıklayarak odaklanmış saldırı emri verin.</li>
-            <li><strong>Şifacı (Ay Hatun):</strong> Q yeteneği etrafındaki tüm dost birimleri anında iyileştirir.</li>
-            <li><strong>Büyücü & Okçu:</strong> Uzak menzilden düşman hattını vurmak için en arkaya konuşlandırın.</li>
-            <li><strong>Muhafız (Demir Bey):</strong> Yüksek canı ile ön saflarda hasarı emerek takımı korur.</li>
+            <li>🏹 <strong>Okçu:</strong> Saniyede 1 ok fırlatır, hedefte hasar verir.</li>
+            <li>🔥 <strong>Büyücü:</strong> Saniyede 1 alev topu fırlatır.</li>
+            <li>⚔️ <strong>Yakın Dövüş:</strong> Saniyede 1 vuruş + 0.5s kırmızı hitbox etkisi.</li>
+            <li>💚 <strong>Şifacı:</strong> En düşük can yüzdesine sahip takım arkadaşını otomatik iyileştirir.</li>
+            <li>👹 <strong>Düşman Spawner:</strong> Sağ-orta kapıdan periyodik dalgalar gelir.</li>
           </ul>
         </div>
       </aside>
@@ -91,25 +94,25 @@
 
     <!-- Alt Takım Portreleri / HUD -->
     <footer class="party-hud">
-      <div class="hud-label">8 EFENDİ KADROSU (1-8 Kısayol Tuşları)</div>
+      <div class="hud-label">ORDU DURUMU (8 EFENDİ)</div>
       <div id="party-grid" class="party-grid"></div>
     </footer>
   </div>
 
-  <!-- Lobi Modalı (Oda Kur / Katıl) -->
+  <!-- Çok Oyunculu Lobi Modalı (1-64 Kişilik Co-op) -->
   <div id="lobby-modal" class="modal-overlay" style="display: flex;">
     <div class="modal-card">
       <div class="modal-header">
-        <h2>⚔️ 8EFENDİ ÇOK OYUNCULU LOBİ</h2>
-        <span class="modal-subtitle">WebRTC P2P ile Sıfır Gecikmeli & Dış IP'siz 1v1 Arena</span>
+        <h2>⚔️ 8EFENDİ CO-OP LOBİ (1-64 OYUNCU)</h2>
+        <span class="modal-subtitle">WebRTC P2P ile Düşman Dalgalarına Karşı Birlikte Savaşın</span>
       </div>
 
       <div class="modal-body">
         <!-- 1. Oda Kur Bölümü -->
         <div class="lobby-card">
           <div class="lobby-icon">🏰</div>
-          <h3>Yeni Bir Oyun Odası Kur</h3>
-          <p>Ev sahibi (Host) olarak Kızıl Bozkır ordusunu yönetin ve arkadaşınızı davet edin.</p>
+          <h3>Yeni Bir Co-op Odası Kur</h3>
+          <p>Oda kurucu (Host) olarak 64 oyuncuya kadar arkadaşınızı davet edip dalgalara karşı savunun.</p>
           <button id="btn-lobby-host" class="primary-btn">Oda Kur (Host Ol)</button>
           
           <div id="lobby-host-section" class="host-section" style="display: none;">
@@ -123,7 +126,7 @@
             </div>
             <div class="waiting-spinner">
               <div class="spinner"></div>
-              <span>Rakip oyuncu bekleniyor...</span>
+              <span>Müttefik oyuncular bekleniyor...</span>
             </div>
           </div>
         </div>
@@ -132,19 +135,19 @@
         <div class="lobby-card">
           <div class="lobby-icon">🛡️</div>
           <h3>Kurulmuş Odaya Katıl</h3>
-          <p>Arkadaşınızın verdiği 5 haneli oda kodunu girerek Gök Orda ordusuyla savaşa girin.</p>
+          <p>Arkadaşınızın verdiği 5 haneli oda kodunu girerek müttefik ordunuzla savaşa katılın.</p>
           <div class="join-input-group">
             <input type="text" id="lobby-room-code" placeholder="Örn: 8E-A9F2X" maxlength="12">
             <button id="btn-lobby-join" class="primary-btn">Odaya Katıl</button>
           </div>
         </div>
 
-        <!-- 3. Tek Kişilik / AI Modu -->
+        <!-- 3. Solo PvE Modu -->
         <div class="lobby-card solo-card">
-          <div class="lobby-icon">🤖</div>
-          <h3>Tek Kişilik Antrenman (AI)</h3>
-          <p>Akıllı bot takımına karşı formasyon ve taktiklerinizi test edin.</p>
-          <button id="btn-lobby-solo" class="secondary-btn">Yapay Zekaya Karşı Oyna</button>
+          <div class="lobby-icon">🏹</div>
+          <h3>Solo Oyna (PvE Hayatta Kalma)</h3>
+          <p>Tek başınıza sağdan gelen sonsuz düşman dalgalarına karşı ordunuzu yönetin.</p>
+          <button id="btn-lobby-solo" class="secondary-btn">Solo Oyna</button>
         </div>
       </div>
 
@@ -154,13 +157,13 @@
     </div>
   </div>
 
-  <!-- Maç Sonu Zafer / Yenilgi Modalı -->
+  <!-- Maç Sonu Yenilgi Modalı -->
   <div id="endgame-modal" class="modal-overlay" style="display: none;">
     <div class="modal-card endgame-card">
-      <h2 id="endgame-title" class="victory-text">🏆 ZAFER!</h2>
-      <p id="endgame-desc">Düşman ordusu tamamen yok edildi!</p>
+      <h2 id="endgame-title" class="defeat-text">💀 ORDULAR DÜŞTÜ!</h2>
+      <p id="endgame-desc">Bozkır yaratıkları tüm savunmayı aştı.</p>
       <div class="endgame-actions">
-        <button id="btn-rematch" class="primary-btn">🔄 Yeniden Oyna / Rövanş</button>
+        <button id="btn-rematch" class="primary-btn">🔄 Yeniden Başla</button>
       </div>
     </div>
   </div>
@@ -170,7 +173,7 @@
     import { Engine } from './src/core/Engine.js';
     try {
       window.gameEngine = new Engine('gameCanvas');
-      console.log('8efendi Multiplayer Engine started successfully!');
+      console.log('8efendi PvE Co-op Engine started successfully!');
     } catch (e) {
       console.error('Engine start error:', e);
     }

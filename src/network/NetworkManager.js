@@ -1,25 +1,27 @@
-/**
- * NetworkManager - WebRTC P2P (PeerJS) Ağ Yöneticisi
+﻿/**
+ * NetworkManager - 1-64 Oyuncu Destekli WebRTC P2P Ağ Yöneticisi
  * 
- * Sunucusuz (Serverless / Netlify uyumlu) gerçek zamanlı eşler arası (Peer-to-Peer)
- * bağlantıyı ve oda yönetimini sağlar.
+ * Host yıldız (Star) topolojisinde çalışarak 1'den 64'e kadar oyuncunun
+ * aynı lobiye bağlanmasını sağlar.
  */
 
 export class NetworkManager {
   constructor() {
     this.peer = null;
-    this.conn = null;
     this.peerId = null;
     this.roomId = null;
     this.isHost = false;
+    this.connections = new Map(); // peerId -> DataConnection (Host için çoklu, Client için tekli)
+    this.clientHostConn = null; // Client'ın host ile olan bağlantısı
     this.isConnected = false;
     this.ping = 0;
-    this.lastPingSent = 0;
     this.pingInterval = null;
 
     this.callbacks = {
       onConnect: [],
       onDisconnect: [],
+      onPeerJoined: [],
+      onPeerLeft: [],
       onData: [],
       onError: [],
       onPing: [],
@@ -39,9 +41,6 @@ export class NetworkManager {
     }
   }
 
-  /**
-   * Benzersiz ve akılda kalıcı 5 haneli oda kodu üretir.
-   */
   generateRoomId() {
     const chars = '23456789ABCDEFGHJKLMNPQRSTUVWXYZ';
     let result = '';
@@ -51,9 +50,6 @@ export class NetworkManager {
     return `8E-${result}`;
   }
 
-  /**
-   * PeerJS nesnesini başlatır.
-   */
   initPeer(customId = null) {
     return new Promise((resolve, reject) => {
       if (typeof window.Peer === 'undefined') {
@@ -67,7 +63,6 @@ export class NetworkManager {
         this.peer.destroy();
       }
 
-      // PeerJS Cloud ve Google STUN yapılandırması
       const peerOptions = {
         debug: 1,
         config: {
@@ -93,9 +88,8 @@ export class NetworkManager {
       });
 
       this.peer.on('connection', connection => {
-        // Gelen bağlantı (Host için)
-        console.log('Yeni oyuncu bağlandı:', connection.peer);
-        this.setupConnection(connection);
+        console.log('Yeni oyuncu katıldı:', connection.peer);
+        this.setupConnection(connection, true);
       });
 
       this.peer.on('error', err => {
@@ -104,7 +98,6 @@ export class NetworkManager {
       });
 
       this.peer.on('disconnected', () => {
-        console.warn('Peer bağlantısı koptu, yeniden bağlanmaya çalışılıyor...');
         if (this.peer && !this.peer.destroyed) {
           this.peer.reconnect();
         }
@@ -112,22 +105,15 @@ export class NetworkManager {
     });
   }
 
-  /**
-   * Yeni bir oyun odası kurar (Host)
-   */
   async hostRoom() {
     this.isHost = true;
-    const roomId = this.generateRoomId();
-    this.roomId = roomId;
-
-    const fullPeerId = `8efendi-${roomId.toLowerCase()}`;
+    this.roomId = this.generateRoomId();
+    const fullPeerId = `8efendi-${this.roomId.toLowerCase()}`;
     await this.initPeer(fullPeerId);
-    return roomId;
+    this.isConnected = true;
+    return this.roomId;
   }
 
-  /**
-   * Var olan bir odaya katılır (Guest)
-   */
   async joinRoom(roomId) {
     this.isHost = false;
     this.roomId = roomId.trim().toUpperCase();
@@ -137,9 +123,7 @@ export class NetworkManager {
 
     return new Promise((resolve, reject) => {
       console.log('Odaya bağlanılıyor:', targetPeerId);
-      const connection = this.peer.connect(targetPeerId, {
-        reliable: true
-      });
+      const connection = this.peer.connect(targetPeerId, { reliable: true });
 
       const timeout = setTimeout(() => {
         if (!this.isConnected) {
@@ -147,7 +131,7 @@ export class NetworkManager {
         }
       }, 10000);
 
-      this.setupConnection(connection);
+      this.setupConnection(connection, false);
 
       this.on('onConnect', () => {
         clearTimeout(timeout);
@@ -156,23 +140,25 @@ export class NetworkManager {
     });
   }
 
-  /**
-   * Veri kanalı ve olay dinleyicilerini ayarlar.
-   */
-  setupConnection(connection) {
-    this.conn = connection;
+  setupConnection(connection, isIncoming = false) {
+    const peerId = connection.peer;
+    this.connections.set(peerId, connection);
 
-    this.conn.on('open', () => {
+    if (!this.isHost && !isIncoming) {
+      this.clientHostConn = connection;
+    }
+
+    connection.on('open', () => {
       this.isConnected = true;
-      console.log('P2P Veri Kanalı Açıldı!');
+      console.log(`[P2P] ${peerId} ile bağlantı kuruldu!`);
       this.startPingLoop();
-      this.emit('onConnect', { isHost: this.isHost, roomId: this.roomId });
+      this.emit('onConnect', { isHost: this.isHost, roomId: this.roomId, peerId });
+      this.emit('onPeerJoined', { peerId });
     });
 
-    this.conn.on('data', data => {
-      // Ping / Pong protokolü
+    connection.on('data', data => {
       if (data && data._type === '__ping__') {
-        this.send({ _type: '__pong__', timestamp: data.timestamp });
+        this.sendToPeer(peerId, { _type: '__pong__', timestamp: data.timestamp });
         return;
       }
       if (data && data._type === '__pong__') {
@@ -182,29 +168,66 @@ export class NetworkManager {
         return;
       }
 
-      this.emit('onData', data);
+      // Eğer Host isek, diğer tüm bağlı istemcilere veriyi broadcast et (Yıldız Topolojisi)
+      if (this.isHost && data && !data._direct) {
+        this.broadcastExcept(peerId, data);
+      }
+
+      this.emit('onData', { senderPeerId: peerId, data });
     });
 
-    this.conn.on('close', () => {
-      this.isConnected = false;
-      this.stopPingLoop();
-      console.warn('P2P Bağlantısı kapandı.');
-      this.emit('onDisconnect');
+    connection.on('close', () => {
+      this.connections.delete(peerId);
+      this.emit('onPeerLeft', { peerId });
+      if (this.connections.size === 0 && !this.isHost) {
+        this.isConnected = false;
+        this.stopPingLoop();
+        this.emit('onDisconnect');
+      }
     });
 
-    this.conn.on('error', err => {
-      console.error('Bağlantı hatası:', err);
+    connection.on('error', err => {
+      console.error(`[P2P] ${peerId} hatası:`, err);
       this.emit('onError', err);
     });
+  }
+
+  send(payload) {
+    if (!this.isConnected) return;
+
+    if (this.isHost) {
+      // Host tüm bağlı oyunculara gönderir
+      for (const conn of this.connections.values()) {
+        if (conn.open) conn.send(payload);
+      }
+    } else if (this.clientHostConn && this.clientHostConn.open) {
+      // Client sadece Host'a iletir (Host diğerlerine yayınlar)
+      this.clientHostConn.send(payload);
+    }
+  }
+
+  sendToPeer(peerId, payload) {
+    const conn = this.connections.get(peerId);
+    if (conn && conn.open) {
+      conn.send({ ...payload, _direct: true });
+    }
+  }
+
+  broadcastExcept(excludePeerId, payload) {
+    for (const [id, conn] of this.connections.entries()) {
+      if (id !== excludePeerId && conn.open) {
+        conn.send(payload);
+      }
+    }
   }
 
   startPingLoop() {
     this.stopPingLoop();
     this.pingInterval = setInterval(() => {
-      if (this.isConnected && this.conn) {
+      if (this.isConnected) {
         this.send({ _type: '__ping__', timestamp: performance.now() });
       }
-    }, 2000);
+    }, 2500);
   }
 
   stopPingLoop() {
@@ -214,29 +237,13 @@ export class NetworkManager {
     }
   }
 
-  /**
-   * Karşı tarafa veri paketi gönderir.
-   */
-  send(payload) {
-    if (this.isConnected && this.conn && this.conn.open) {
-      try {
-        this.conn.send(payload);
-      } catch (err) {
-        console.error('Veri gönderme hatası:', err);
-      }
-    }
-  }
-
-  /**
-   * Bağlantıyı güvenle sonlandırır.
-   */
   disconnect() {
     this.stopPingLoop();
     this.isConnected = false;
-    if (this.conn) {
-      this.conn.close();
-      this.conn = null;
+    for (const conn of this.connections.values()) {
+      conn.close();
     }
+    this.connections.clear();
     if (this.peer && !this.peer.destroyed) {
       this.peer.destroy();
       this.peer = null;

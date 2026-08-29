@@ -1,5 +1,6 @@
-import { EventBus } from '../core/EventBus.js';
+﻿import { EventBus } from '../core/EventBus.js';
 import { FormationType } from '../navigation/FormationManager.js';
+import { UnitClasses } from '../config/UnitDatabase.js';
 
 export class UIManager {
   constructor(partyManager, multiplayerSync = null) {
@@ -32,13 +33,13 @@ export class UIManager {
       this.updateInfoPanel();
     });
 
-    EventBus.on('enemy:inspected', enemyUnit => {
-      this.updateEnemyInfoPanel(enemyUnit);
+    EventBus.on('unit:inspected', unit => {
+      this.updateInspectedUnitPanel(unit);
     });
 
-    EventBus.on('scores:updated', ({ aliveLocal, aliveEnemy }) => {
+    EventBus.on('scores:updated', ({ aliveLocal, totalAllies, enemyCount, wave }) => {
       if (this.scoreBadge) {
-        this.scoreBadge.innerHTML = `🔴 Dost: <strong>${aliveLocal}/8</strong> | 🔵 Düşman: <strong>${aliveEnemy}/8</strong>`;
+        this.scoreBadge.innerHTML = `🛡️ Müttefik: <strong>${totalAllies}</strong> | 👹 Düşman: <strong>${enemyCount}</strong> | 🌊 Dalga: <strong>${wave || 1}</strong>`;
       }
       this.updateCardHealths();
     });
@@ -63,16 +64,6 @@ export class UIManager {
       selectAllBtn.addEventListener('click', () => this.party.selectAll());
     }
 
-    const skillBtn = document.getElementById('btn-cast-skill');
-    if (skillBtn) {
-      skillBtn.addEventListener('click', () => {
-        const selected = this.party.getSelectedUnits();
-        if (selected.length > 0) {
-          selected[0].useSkill(0, selected[0].position);
-        }
-      });
-    }
-
     // Rövanş Butonu
     if (this.btnRematch) {
       this.btnRematch.addEventListener('click', () => {
@@ -80,14 +71,14 @@ export class UIManager {
       });
     }
 
-    // Savaş Naraları (Hızlı Sohbet) Butonları
+    // Savaş Naraları Butonları
     document.querySelectorAll('.taunt-btn').forEach(btn => {
       btn.addEventListener('click', () => {
         const text = btn.dataset.taunt;
         if (this.sync) {
           this.sync.sendTaunt(text);
-          this.showChatBubble('Siz', text);
         }
+        this.showChatBubble('Siz', text);
       });
     });
 
@@ -97,8 +88,10 @@ export class UIManager {
     if (chatSendBtn && chatInput) {
       const sendAction = () => {
         const val = chatInput.value.trim();
-        if (val && this.sync) {
-          this.sync.sendTaunt(val);
+        if (val) {
+          if (this.sync) {
+            this.sync.sendTaunt(val);
+          }
           this.showChatBubble('Siz', val);
           chatInput.value = '';
         }
@@ -120,10 +113,34 @@ export class UIManager {
     }
   }
 
-  updateModeDisplay(text) {
+  updateModeDisplay(modeText) {
     if (this.modeBadge) {
-      this.modeBadge.textContent = text;
+      this.modeBadge.textContent = modeText;
     }
+  }
+
+  showToast(message, type = 'info') {
+    const toast = document.createElement('div');
+    toast.className = `game-toast toast-${type}`;
+    toast.textContent = message;
+    document.body.appendChild(toast);
+    setTimeout(() => toast.classList.add('visible'), 10);
+    setTimeout(() => {
+      toast.classList.remove('visible');
+      setTimeout(() => toast.remove(), 300);
+    }, 3000);
+  }
+
+  showChatBubble(sender, text) {
+    if (!this.chatContainer) return;
+    const bubble = document.createElement('div');
+    bubble.className = 'chat-bubble';
+    bubble.innerHTML = `<strong>${sender}:</strong> ${text}`;
+    this.chatContainer.appendChild(bubble);
+    setTimeout(() => {
+      bubble.style.opacity = '0';
+      setTimeout(() => bubble.remove(), 400);
+    }, 4500);
   }
 
   renderPartyCards() {
@@ -139,14 +156,11 @@ export class UIManager {
         <div class="unit-card-header">
           <span class="unit-key-badge">${index + 1}</span>
           <span class="unit-color-dot" style="background-color: ${unit.color}"></span>
-          <span class="unit-card-name">${unit.name.split(' ')[0]}</span>
+          <span class="unit-card-name">${unit.name}</span>
         </div>
         <div class="unit-card-title">${unit.title}</div>
         <div class="bar-container">
           <div class="bar-fill hp-bar" id="hp-bar-${unit.id}" style="width: 100%;"></div>
-        </div>
-        <div class="bar-container energy-bar-container">
-          <div class="bar-fill energy-bar" id="energy-bar-${unit.id}" style="width: 100%;"></div>
         </div>
       `;
 
@@ -161,7 +175,6 @@ export class UIManager {
   updateCardHealths() {
     this.party.getAllUnits().forEach(unit => {
       const hpEl = document.getElementById(`hp-bar-${unit.id}`);
-      const energyEl = document.getElementById(`energy-bar-${unit.id}`);
       if (hpEl) {
         const hpPercent = Math.max(0, (unit.hp / unit.maxHp) * 100);
         hpEl.style.width = `${hpPercent}%`;
@@ -170,10 +183,6 @@ export class UIManager {
         } else {
           hpEl.parentElement.parentElement.classList.remove('unit-dead');
         }
-      }
-      if (energyEl) {
-        const energyPercent = Math.max(0, (unit.energy / unit.maxEnergy) * 100);
-        energyEl.style.width = `${energyPercent}%`;
       }
     });
   }
@@ -201,12 +210,17 @@ export class UIManager {
         <div class="empty-state">
           <p>Herhangi bir birim seçilmedi.</p>
           <small>Sol tıkla birim seçebilir veya sürükleyerek toplu seçim yapabilirsiniz.<br><br>
-          ⚔️ <strong>Saldırı:</strong> Birimlerini seçip düşmana sağ tıkla!</small>
+          🛡️ <strong>Dost Ateşi:</strong> Kapalı.<br>
+          ⚔️ <strong>Otomatik Savaş:</strong> Birimler 1.0s aralıkla otomatik saldırır ve şifa verir.</small>
         </div>
       `;
     } else if (selected.length === 1) {
       const u = selected[0];
-      const skill = u.skills[0];
+      let attackDesc = '🗡️ Saniyede 1 vuruş + 0.5s Hitbox Alanı';
+      if (u.classType === UnitClasses.ARCHER) attackDesc = '🏹 Saniyede 1 uçan ok fırlatır';
+      else if (u.classType === UnitClasses.MAGE) attackDesc = '🔥 Saniyede 1 alev topu fırlatır';
+      else if (u.classType === UnitClasses.HEALER) attackDesc = '💚 En düşük can yüzdeli takım arkadaşını otomatik iyileştirir';
+
       this.infoPanel.innerHTML = `
         <div class="single-unit-view">
           <div class="unit-header-row">
@@ -217,29 +231,21 @@ export class UIManager {
           <p class="unit-desc">${u.description}</p>
           <div class="stat-grid">
             <div><strong>HP:</strong> ${Math.round(u.hp)} / ${u.maxHp}</div>
-            <div><strong>Enerji:</strong> ${Math.round(u.energy)} / ${u.maxEnergy}</div>
             <div><strong>Hız:</strong> ${u.speed}</div>
             <div><strong>Saldırı Gücü:</strong> ${u.attackPower}</div>
             <div><strong>Menzil:</strong> ${u.attackRange}px</div>
-            <div><strong>Saldırı Hızı:</strong> ${u.attackSpeed}/s</div>
           </div>
-          ${
-            skill
-              ? `
-            <div class="skill-box">
-              <div class="skill-name">⚡ Yetenek: ${skill.name} (Q)</div>
-              <div class="skill-details">Maliyet: ${skill.cost} Enerji | Bekleme: ${skill.cd}s</div>
-            </div>
-          `
-              : ''
-          }
+          <div class="skill-box">
+            <div class="skill-name">⚔️ Temel Mekanik</div>
+            <div class="skill-details">${attackDesc}</div>
+          </div>
         </div>
       `;
     } else {
       this.infoPanel.innerHTML = `
         <div class="multi-unit-view">
           <h3>Grup Seçimi (${selected.length} Efendi)</h3>
-          <p>Tüm seçili birimlere sağ tık ile formasyon komutu veya düşmana saldırı emri verebilirsiniz.</p>
+          <p>Seçili tüm birimleri formasyon ile haritada konumlandırabilirsiniz.</p>
           <div class="selected-tags">
             ${selected.map(u => `<span class="unit-pill" style="border-left: 4px solid ${u.color}">${u.name.split(' ')[0]}</span>`).join('')}
           </div>
@@ -248,24 +254,20 @@ export class UIManager {
     }
   }
 
-  updateEnemyInfoPanel(u) {
-    if (!this.infoPanel) return;
+  updateInspectedUnitPanel(unit) {
+    if (!this.infoPanel || !unit) return;
     this.infoPanel.innerHTML = `
-      <div class="single-unit-view enemy-view">
+      <div class="single-unit-view">
         <div class="unit-header-row">
-          <span class="color-badge" style="background:#e74c3c"></span>
-          <h3>[DÜŞMAN] ${u.name}</h3>
-          <span class="role-tag enemy-tag">${u.title}</span>
+          <span class="color-badge" style="background:${unit.color}"></span>
+          <h3>${unit.name}</h3>
+          <span class="role-tag">${unit.isEnemy ? 'Düşman' : 'Müttefik'}</span>
         </div>
-        <p class="unit-desc">${u.description}</p>
         <div class="stat-grid">
-          <div><strong>HP:</strong> ${Math.round(u.hp)} / ${u.maxHp}</div>
-          <div><strong>Enerji:</strong> ${Math.round(u.energy)} / ${u.maxEnergy}</div>
-          <div><strong>Saldırı Gücü:</strong> ${u.attackPower}</div>
-          <div><strong>Menzil:</strong> ${u.attackRange}px</div>
-        </div>
-        <div class="tactical-hint">
-          🎯 <em>Seçili birimlerinle bu düşmana sağ tıklayarak doğrudan hücum edebilirsin!</em>
+          <div><strong>HP:</strong> ${Math.round(unit.hp)} / ${unit.maxHp}</div>
+          <div><strong>Saldırı Gücü:</strong> ${unit.attackPower}</div>
+          <div><strong>Hız:</strong> ${unit.speed}</div>
+          <div><strong>Durum:</strong> ${unit.isDead ? 'Ölü' : 'Canlı'}</div>
         </div>
       </div>
     `;
@@ -273,52 +275,13 @@ export class UIManager {
 
   showEndGameModal(result) {
     if (!this.endGameModal) return;
-    const isVictory = result === 'victory';
-
-    this.endGameTitle.textContent = isVictory ? '🏆 ZAFER!' : '💀 YENİLGİ!';
-    this.endGameTitle.className = isVictory ? 'victory-text' : 'defeat-text';
-    this.endGameDesc.textContent = isVictory
-      ? 'Düşman ordusu darmadağın edildi! 8 Efendi meydanın mutlak hakimi oldu!'
-      : 'Tüm efendileriniz savaş alanında düştü. Bir dahaki sefere taktiğinizi gözden geçirin!';
-
+    this.endGameTitle.textContent = '💀 ORDULAR DÜŞTÜ!';
+    this.endGameTitle.className = 'defeat-text';
+    this.endGameDesc.textContent = 'Bozkır yaratıkları tüm savunma hatlarını yok etti.';
     this.endGameModal.style.display = 'flex';
   }
 
   hideEndGameModal() {
-    if (this.endGameModal) {
-      this.endGameModal.style.display = 'none';
-    }
-  }
-
-  showChatBubble(sender, text) {
-    if (!this.chatContainer) return;
-    const bubble = document.createElement('div');
-    bubble.className = 'chat-bubble';
-    bubble.innerHTML = `<strong>${sender}:</strong> ${text}`;
-    this.chatContainer.appendChild(bubble);
-
-    setTimeout(() => {
-      bubble.classList.add('fade-out');
-      setTimeout(() => bubble.remove(), 500);
-    }, 4500);
-  }
-
-  showToast(message, type = 'info') {
-    const toast = document.createElement('div');
-    toast.className = `game-toast toast-${type}`;
-    toast.textContent = message;
-    document.body.appendChild(toast);
-
-    setTimeout(() => {
-      toast.classList.add('show');
-      setTimeout(() => {
-        toast.classList.remove('show');
-        setTimeout(() => toast.remove(), 400);
-      }, 3000);
-    }, 50);
-  }
-
-  showRematchNotification() {
-    this.showToast('Rakip rövanş maçı teklif etti! Yeniden Başlat butonuna basarak kabul edin.', 'info');
+    if (this.endGameModal) this.endGameModal.style.display = 'none';
   }
 }

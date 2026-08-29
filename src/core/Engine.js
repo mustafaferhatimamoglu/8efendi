@@ -1,4 +1,4 @@
-import { PartyManager } from '../entities/PartyManager.js';
+﻿import { PartyManager } from '../entities/PartyManager.js';
 import { InputManager } from './InputManager.js';
 import { UIManager } from '../ui/UIManager.js';
 import { NetworkManager } from '../network/NetworkManager.js';
@@ -25,7 +25,7 @@ export class Engine {
     this.uiManager = new UIManager(this.partyManager, this.multiplayerSync);
     this.lobbyUI = new LobbyUI(this, this.networkManager);
 
-    this.gameMode = 'solo'; // 'solo' veya 'multiplayer'
+    this.gameMode = 'solo'; // 'solo' veya 'coop'
     this.isHost = true;
 
     this.bindEvents();
@@ -37,6 +37,9 @@ export class Engine {
   resizeCanvas() {
     this.canvas.width = this.canvas.parentElement.clientWidth;
     this.canvas.height = this.canvas.parentElement.clientHeight || 650;
+    if (this.partyManager && this.partyManager.spawner) {
+      this.partyManager.spawner.setCanvasSize(this.canvas.width, this.canvas.height);
+    }
   }
 
   bindEvents() {
@@ -49,36 +52,31 @@ export class Engine {
     this.gameMode = 'solo';
     this.isHost = true;
     this.partyManager.initParties(true, true);
-    this.uiManager.updateModeDisplay('Tek Oyunculu (AI Antrenman)');
+    this.partyManager.spawner.setCanvasSize(this.canvas.width, this.canvas.height);
+    this.uiManager.updateModeDisplay('Solo PvE Modu');
     this.uiManager.renderPartyCards();
   }
 
   async hostMultiplayerGame() {
-    this.gameMode = 'multiplayer';
+    this.gameMode = 'coop';
     this.isHost = true;
     const roomId = await this.networkManager.hostRoom();
     this.partyManager.initParties(true, false);
-    this.uiManager.updateModeDisplay(`Oda: ${roomId} (Kızıl Takım - Bekleniyor)`);
+    this.partyManager.spawner.setCanvasSize(this.canvas.width, this.canvas.height);
+    this.uiManager.updateModeDisplay(`Co-op Oda: ${roomId} (Host - Müttefikler Bekleniyor)`);
     this.uiManager.renderPartyCards();
     return roomId;
   }
 
   async joinMultiplayerGame(roomId) {
-    this.gameMode = 'multiplayer';
+    this.gameMode = 'coop';
     this.isHost = false;
     await this.networkManager.joinRoom(roomId);
     this.partyManager.initParties(false, false);
-    this.uiManager.updateModeDisplay(`Oda: ${roomId} (Gök Takım - Bağlandı)`);
+    this.partyManager.spawner.setCanvasSize(this.canvas.width, this.canvas.height);
+    this.uiManager.updateModeDisplay(`Co-op Oda: ${roomId} (Müttefik Ordusu Bağlandı)`);
     this.uiManager.renderPartyCards();
     return roomId;
-  }
-
-  onMultiplayerReady(packet) {
-    const roleText = this.networkManager.isHost
-      ? 'Kızıl Bozkır (Ev Sahibi)'
-      : 'Gök Orda (Misafir)';
-    this.uiManager.updateModeDisplay(`⚔️ 1v1 Savaş: ${roleText}`);
-    this.uiManager.showToast(`Rakip bağlandı! Savaş başladı!`, 'success');
   }
 
   restartGame(isRemoteTriggered = false) {
@@ -86,13 +84,10 @@ export class Engine {
       this.startSoloGame();
     } else {
       this.partyManager.initParties(this.networkManager.isHost, false);
-      if (!isRemoteTriggered && this.multiplayerSync) {
-        this.multiplayerSync.sendRematchAccept();
-      }
     }
     this.uiManager.hideEndGameModal();
     this.uiManager.renderPartyCards();
-    this.uiManager.showToast('Yeni Raunt Başladı!', 'info');
+    this.uiManager.showToast('Yeni Savunma Başladı!', 'info');
   }
 
   loop(currentTime) {
@@ -116,10 +111,7 @@ export class Engine {
     // Izgara Arka Plan Çizimi
     this.drawGrid();
 
-    // Savaş Alanı Bölge Çizgisi
-    this.drawBattlefieldDividers();
-
-    // Birimler ve Efektler
+    // Birimler, Düşmanlar, Mermiler ve Spawner
     this.partyManager.render(this.ctx);
 
     // Seçim Kutusu
@@ -145,32 +137,16 @@ export class Engine {
       this.ctx.lineTo(this.canvas.width, y);
       this.ctx.stroke();
     }
-    this.ctx.restore();
-  }
 
-  drawBattlefieldDividers() {
-    this.ctx.save();
-    const midX = this.canvas.width / 2;
-
-    // Orta savaş çizgisi
-    this.ctx.strokeStyle = 'rgba(255, 255, 255, 0.08)';
-    this.ctx.lineWidth = 1.5;
-    this.ctx.setLineDash([8, 8]);
-    this.ctx.beginPath();
-    this.ctx.moveTo(midX, 0);
-    this.ctx.lineTo(midX, this.canvas.height);
-    this.ctx.stroke();
-    this.ctx.setLineDash([]);
-
-    // Bölge Etiketleri
+    // Savunma ve Düşman Bölgesi İşaretleri
     this.ctx.font = 'bold 10px sans-serif';
-    this.ctx.fillStyle = 'rgba(231, 76, 60, 0.15)';
+    this.ctx.fillStyle = 'rgba(46, 204, 113, 0.15)';
     this.ctx.textAlign = 'left';
-    this.ctx.fillText('🔴 KIZIL BOZKIR BÖLGESİ', 20, 25);
+    this.ctx.fillText('🛡️ SAVUNMA HATTI', 20, 25);
 
-    this.ctx.fillStyle = 'rgba(52, 152, 219, 0.15)';
+    this.ctx.fillStyle = 'rgba(231, 76, 60, 0.15)';
     this.ctx.textAlign = 'right';
-    this.ctx.fillText('🔵 GÖK ORDA BÖLGESİ', this.canvas.width - 20, 25);
+    this.ctx.fillText('👹 CANAVAR TEHDİDİ', this.canvas.width - 20, 25);
 
     this.ctx.restore();
   }

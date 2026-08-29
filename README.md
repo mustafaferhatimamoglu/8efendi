@@ -1,6 +1,6 @@
-﻿# ⚔️ 8efendi - 2D Çok Oyunculu Strateji & Grup Yönetim Oyunu
+﻿# ⚔️ 8efendi - 2D PvE Co-op Strateji & Bozkır Hayatta Kalma
 
-8 farklı Türk/Bozkır temalı efendiden (**Alp Er, Demir Bey, Batur, Gökbörü, Kam Bilge, Karanlık Gölge, Ay Hatun, Kutluk Han**) oluşan bir ordunun gerçek zamanlı taktiksel yönetimini sağlayan, **WebRTC P2P (Sunucusuz / Dış IP'siz)** tabanlı **2D Çok Oyunculu (1v1 PvP / AI)** strateji oyunu.
+8 farklı Türk/Bozkır temalı efendiden (**Alp Er, Demir Bey, Batur, Gökbörü, Kam Bilge, Karanlık Gölge, Ay Hatun, Kutluk Han**) oluşan ordularla, **1 ile 64 oyuncuya kadar (WebRTC P2P Co-op)** müttefik olarak sağdan gelen sonsuz canavar dalgalarına karşı savaştığınız 2D strateji oyunu.
 
 ---
 
@@ -10,51 +10,39 @@ Oyunu herhangi bir kuruluma veya indirmeye gerek kalmadan doğrudan tarayıcın�
 
 👉 **[https://8efendi.netlify.app](https://8efendi.netlify.app)**
 
-> **Not:** Kendi Netlify dağıtımınız için repo [https://github.com/mustafaferhatimamoglu/8efendi](https://github.com/mustafaferhatimamoglu/8efendi) adresiyle eşleştiğinde otomatik olarak yayına alınır.
+---
+
+## 🌟 Öne Çıkan PvE & Co-op Özellikleri
+
+- **🛡️ PvE & Co-op Odaklı (Dost Ateşi Kapalı)**:
+  - Oyuncular birbirine asla zarar veremez. Tüm güç birleştirilerek gelen yaratıklara karşı savunma yapılır.
+- **🌐 1 - 64 Oyuncu Kapasitesi (WebRTC P2P Yıldız Topolojisi)**:
+  - Tek tıkla oda oluşturun. 64 oyuncuya kadar müttefikler aynı lobiye bağlanıp kendi 8 efendisiyle savaşa katılabilir.
+- **👹 Sonsuz Düşman Spawner Mekanizması**:
+  - Haritanın sağ-orta bölgesindeki düşman kapısından periyodik ve giderek güçlenen yaratık dalgaları doğar ve doğrudan savunma hattına hücum eder.
+- **⚔️ Sadeleştirilmiş Sınıf & Saldırı Dinamikleri (1.0s Cooldown)**:
+  - 🏹 **Okçu (Ranger):** Saniyede 1 ok mermisi fırlatır; ok havada fiziksel olarak hedefe uçar ve çarpınca hasar verir.
+  - 🔥 **Büyücü (Mage):** Saniyede 1 alev topu (fireball) fırlatır.
+  - ⚔️ **Yakın Dövüşçüler (Melee):** Saniyede 1 vuruş yapar ve karakterin önünde 0.5 saniye süren yarı saydam kırmızı etki alanı (Hitbox FX) belirir.
+  - 💚 **Şifacı (Healer):** Manuel skiller kaldırıldı; menzilindeki takım arkadaşları arasından can yüzdesi en düşük (% HP) olana otomatik şifa ışını atar.
 
 ---
 
-## 🌟 Öne Çıkan Özellikler
-
-- **🌐 Sıfır Sunucu & Dış IP'siz Çok Oyunculu (WebRTC P2P)**:
-  - **Dış IP veya Port Yönlendirme GEREKMEZ:** PeerJS ve WebRTC DataChannel protokolü sayesinde oyuncuların tarayıcıları doğrudan birbirine bağlanır.
-  - **Oda Sistemi:** Tek tıkla oda oluşturma, 5 haneli oda kodu veya doğrudan davet bağlantısı (`#oda=8E-XXXXX`) paylaşımı.
-  - **Gerçek Zamanlı Senkronizasyon:** Birim konumları, formasyonlar, FSM durumları, saldırılar, HP/Enerji ve alan etkili yetenekler eşzamanlı aktarılır.
-  - **Canlı Ağ Göstergeleri:** HUD üzerinde anlık gecikme süresi (Ping ms) ve skor tablosu.
-- **⚔️ 1v1 PvP Meydan Savaşı**:
-  - **Kızıl Bozkır (Ev Sahibi)** vs **Gök Orda (Misafir)** takımları.
-  - Düşman birimlerini hedef alarak odaklanmış taarruz yapabilme.
-  - Bir takımın tüm birimleri düştüğünde Zafer / Yenilgi ekranı ve tek tıkla Rövanş başlatma.
-- **🤖 Akıllı Yapay Zeka (Tek Oyunculu Mod)**:
-  - Çok oyunculu oynamak istemediğinizde akıllı bot takımına karşı antrenman yapabilme.
-- **💬 Savaş Naraları & Hızlı Sohbet**:
-  - Savaş esnasında rakibe hızlı naralar ve taktik mesajları fırlatabilme.
-- **🛡️ Akıllı Formasyon & Flocking Sistemi**:
-  - 4 Farklı Düzen: **Kutu (2x4)**, **V-Hücum (Wedge)**, **Hat (Line)**, **Çember (Circle)**.
-  - Hedefe varışta yumuşama (`Arrive`) ve çarpışma önleme (`Separation`).
-- **⚙️ Finite State Machine (FSM)**:
-  - Her karakter bağımsız `Idle`, `Move`, `Attack`, `Skill` durumlarını yönetir.
-
----
-
-## 🎮 Nasıl Oynanır? (Arkadaşınla 1v1 Savaş)
+## 🎮 Nasıl Oynanır?
 
 1. [https://8efendi.netlify.app](https://8efendi.netlify.app) adresine gidin.
-2. **"Oda Kur (Host Ol)"** butonuna tıklayın.
-3. Ekranda beliren **"Davet Linkini Kopyala"** butonuna basarak bağlantıyı arkadaşınıza gönderin.
-4. Arkadaşınız bağlantıyı açtığı anda doğrudan aynı arenaya bağlanır ve 1v1 meydan savaşı başlar!
+2. **Solo Oyna** butonuna basarak doğrudan tek başınıza PvE hayatta kalma moduna başlayabilir veya **Oda Kur** diyerek 64 kişiye kadar arkadaşlarınızı davet edebilirsiniz.
 
 ---
 
-## 🕹️ Kontroller & Kısayollar
+## 🕹️ Kontroller
 
 | Kontrol | Eylem |
 |---|---|
 | **Sol Tık + Sürükle** | Yeşil kutuyla alan seçimi (Box Select). |
-| **Sol Tık (Birim)** | Tekil dost birim seçimi veya düşman birim inceleme. |
+| **Sol Tık (Birim)** | Tekil dost birim seçimi veya düşman inceleme. |
 | **Sağ Tık (Zemin)** | Seçili birimleri akıllı formasyonla hedef noktaya yürüt. |
-| **Sağ Tık (Düşman)** | Seçili birimlerin o düşmana odaklanıp saldırmasını sağla. |
+| **Sağ Tık (Düşman)** | Seçili birimleri o düşmana hücum ettir. |
 | **1 - 8 Tuşları** | İlgili sıradaki efendiyi hızlıca seç. |
 | **A Tuşu** | Bütün takımı aynı anda seç. |
-| **Q Tuşu** | Seçili efendinin özel yeteneğini imlecin olduğu noktaya fırlat. |
-| **Formasyon Butonları** | Üst menüden takım düzenini değiştir (Kutu, V, Hat, Çember). |
+| **Formasyon Butonları** | Takım düzenini değiştir (Kutu, V, Hat, Çember). |
