@@ -8,14 +8,16 @@ export class UIManager {
     this.sync = multiplayerSync;
 
     this.partyGrid = document.getElementById('party-grid');
-    this.infoPanel = document.getElementById('selected-info');
+    this.infoPanel = document.getElementById('unit-detail-content') || document.getElementById('selected-info');
     this.modeBadge = document.getElementById('game-mode-badge');
     this.pingBadge = document.getElementById('ping-badge');
-    this.scoreBadge = document.getElementById('score-badge');
+    this.waveDisplay = document.getElementById('wave-display');
+    this.enemyCountDisplay = document.getElementById('enemy-count-display');
+    this.alliesCountDisplay = document.getElementById('allies-count-display');
     this.endGameModal = document.getElementById('endgame-modal');
     this.endGameTitle = document.getElementById('endgame-title');
-    this.endGameDesc = document.getElementById('endgame-desc');
-    this.btnRematch = document.getElementById('btn-rematch');
+    this.endGameDesc = document.getElementById('endgame-message');
+    this.btnRestart = document.getElementById('btn-restart-game');
     this.chatContainer = document.getElementById('chat-bubbles-container');
 
     this.initUI();
@@ -38,9 +40,9 @@ export class UIManager {
     });
 
     EventBus.on('scores:updated', ({ aliveLocal, totalAllies, enemyCount, wave }) => {
-      if (this.scoreBadge) {
-        this.scoreBadge.innerHTML = `🛡️ Müttefik: <strong>${totalAllies}</strong> | 👹 Düşman: <strong>${enemyCount}</strong> | 🌊 Dalga: <strong>${wave || 1}</strong>`;
-      }
+      if (this.waveDisplay) this.waveDisplay.textContent = wave || 1;
+      if (this.enemyCountDisplay) this.enemyCountDisplay.textContent = enemyCount;
+      if (this.alliesCountDisplay) this.alliesCountDisplay.textContent = `${totalAllies} / ${totalAllies}`;
       this.updateCardHealths();
     });
 
@@ -49,56 +51,21 @@ export class UIManager {
     });
 
     // Formasyon butonları
-    document.querySelectorAll('.formation-btn').forEach(btn => {
+    document.querySelectorAll('.form-btn, .formation-btn').forEach(btn => {
       btn.addEventListener('click', () => {
-        document.querySelectorAll('.formation-btn').forEach(b => b.classList.remove('active'));
+        document.querySelectorAll('.form-btn, .formation-btn').forEach(b => b.classList.remove('active'));
         btn.classList.add('active');
         const form = btn.dataset.formation;
-        this.party.setFormation(form);
+        if (form) {
+          this.party.setFormation(form);
+        }
       });
     });
 
-    // Toplu eylem butonları
-    const selectAllBtn = document.getElementById('btn-select-all');
-    if (selectAllBtn) {
-      selectAllBtn.addEventListener('click', () => this.party.selectAll());
-    }
-
-    // Rövanş Butonu
-    if (this.btnRematch) {
-      this.btnRematch.addEventListener('click', () => {
+    // Rövanş / Yeniden Başlat Butonu
+    if (this.btnRestart) {
+      this.btnRestart.addEventListener('click', () => {
         EventBus.emit('match:restart');
-      });
-    }
-
-    // Savaş Naraları Butonları
-    document.querySelectorAll('.taunt-btn').forEach(btn => {
-      btn.addEventListener('click', () => {
-        const text = btn.dataset.taunt;
-        if (this.sync) {
-          this.sync.sendTaunt(text);
-        }
-        this.showChatBubble('Siz', text);
-      });
-    });
-
-    // Özel Sohbet Gönderimi
-    const chatInput = document.getElementById('quick-chat-input');
-    const chatSendBtn = document.getElementById('btn-send-chat');
-    if (chatSendBtn && chatInput) {
-      const sendAction = () => {
-        const val = chatInput.value.trim();
-        if (val) {
-          if (this.sync) {
-            this.sync.sendTaunt(val);
-          }
-          this.showChatBubble('Siz', val);
-          chatInput.value = '';
-        }
-      };
-      chatSendBtn.addEventListener('click', sendAction);
-      chatInput.addEventListener('keydown', e => {
-        if (e.key === 'Enter') sendAction();
       });
     }
 
@@ -120,13 +87,14 @@ export class UIManager {
   }
 
   showToast(message, type = 'info') {
+    const container = document.getElementById('toast-container') || document.body;
     const toast = document.createElement('div');
     toast.className = `game-toast toast-${type}`;
     toast.textContent = message;
-    document.body.appendChild(toast);
-    setTimeout(() => toast.classList.add('visible'), 10);
+    container.appendChild(toast);
+    setTimeout(() => toast.classList.add('show'), 10);
     setTimeout(() => {
-      toast.classList.remove('visible');
+      toast.classList.remove('show');
       setTimeout(() => toast.remove(), 300);
     }, 3000);
   }
@@ -174,14 +142,18 @@ export class UIManager {
 
   updateCardHealths() {
     this.party.getAllUnits().forEach(unit => {
-      const hpEl = document.getElementById(`hp-bar-${unit.id}`);
-      if (hpEl) {
-        const hpPercent = Math.max(0, (unit.hp / unit.maxHp) * 100);
-        hpEl.style.width = `${hpPercent}%`;
+      const bar = document.getElementById(`hp-bar-${unit.id}`);
+      if (bar) {
+        const ratio = Math.max(0, (unit.hp / unit.maxHp) * 100);
+        bar.style.width = `${ratio}%`;
         if (unit.isDead) {
-          hpEl.parentElement.parentElement.classList.add('unit-dead');
+          bar.style.backgroundColor = '#555';
+        } else if (ratio < 25) {
+          bar.style.backgroundColor = 'var(--enemy-red)';
+        } else if (ratio < 50) {
+          bar.style.backgroundColor = 'var(--accent-orange)';
         } else {
-          hpEl.parentElement.parentElement.classList.remove('unit-dead');
+          bar.style.backgroundColor = 'var(--hp-green)';
         }
       }
     });
@@ -211,44 +183,39 @@ export class UIManager {
           <p>Herhangi bir birim seçilmedi.</p>
           <small>Sol tıkla birim seçebilir veya sürükleyerek toplu seçim yapabilirsiniz.<br><br>
           🛡️ <strong>Dost Ateşi:</strong> Kapalı.<br>
-          ⚔️ <strong>Otomatik Savaş:</strong> Birimler 1.0s aralıkla otomatik saldırır ve şifa verir.</small>
+          ⚔️ <strong>Otomatik Savaş:</strong> Birimler aralıklarla otomatik saldırır ve şifa verir.</small>
         </div>
       `;
     } else if (selected.length === 1) {
       const u = selected[0];
-      let attackDesc = '🗡️ Saniyede 1 vuruş + 0.5s Hitbox Alanı';
-      if (u.classType === UnitClasses.ARCHER) attackDesc = '🏹 Saniyede 1 uçan ok fırlatır';
-      else if (u.classType === UnitClasses.MAGE) attackDesc = '🔥 Saniyede 1 alev topu fırlatır';
-      else if (u.classType === UnitClasses.HEALER) attackDesc = '💚 En düşük can yüzdeli takım arkadaşını otomatik iyileştirir';
+      let attackDesc = '🗡️ Yakın Dövüş + Alan İttirmesi (Knockback)';
+      if (u.classType === UnitClasses.ARCHER) attackDesc = '🏹 800px Ok Saldırısı + 5x Hız Yeteneği';
+      else if (u.classType === UnitClasses.MAGE) attackDesc = '🔥 750px Alev Topu + 5x Hız Yeteneği';
+      else if (u.classType === UnitClasses.HEALER) attackDesc = '💚 650px Otomatik Şifa (0.5s / 70 HP)';
 
       this.infoPanel.innerHTML = `
         <div class="single-unit-view">
           <div class="unit-header-row">
-            <span class="color-badge" style="background:${u.color}"></span>
-            <h3>${u.name}</h3>
-            <span class="role-tag">${u.title}</span>
+            <span class="color-badge" style="background:${u.color}; display:inline-block; width:12px; height:12px; border-radius:50%; margin-right:6px;"></span>
+            <strong>${u.name}</strong>
           </div>
-          <p class="unit-desc">${u.description}</p>
-          <div class="stat-grid">
+          <p class="unit-desc" style="font-size:11px; margin:6px 0; color:#8c9ba5;">${u.description || ''}</p>
+          <div class="stat-grid" style="display:grid; grid-template-columns:1fr 1fr; gap:4px; font-size:11px;">
             <div><strong>HP:</strong> ${Math.round(u.hp)} / ${u.maxHp}</div>
             <div><strong>Hız:</strong> ${u.speed}</div>
-            <div><strong>Saldırı Gücü:</strong> ${u.attackPower}</div>
+            <div><strong>Saldırı:</strong> ${u.attackPower}</div>
             <div><strong>Menzil:</strong> ${u.attackRange}px</div>
           </div>
-          <div class="skill-box">
-            <div class="skill-name">⚔️ Temel Mekanik</div>
-            <div class="skill-details">${attackDesc}</div>
+          <div class="skill-box" style="margin-top:6px; font-size:11px; color:#f1c40f;">
+            ${attackDesc}
           </div>
         </div>
       `;
     } else {
       this.infoPanel.innerHTML = `
         <div class="multi-unit-view">
-          <h3>Grup Seçimi (${selected.length} Efendi)</h3>
-          <p>Seçili tüm birimleri formasyon ile haritada konumlandırabilirsiniz.</p>
-          <div class="selected-tags">
-            ${selected.map(u => `<span class="unit-pill" style="border-left: 4px solid ${u.color}">${u.name.split(' ')[0]}</span>`).join('')}
-          </div>
+          <div style="font-size:12px; font-weight:bold; color:#00d2d3;">Grup Seçimi (${selected.length} Efendi)</div>
+          <p style="font-size:11px; margin:4px 0; color:#8c9ba5;">Sağ tıklayarak topluca hedef noktaya yürütebilirsiniz.</p>
         </div>
       `;
     }
@@ -259,13 +226,13 @@ export class UIManager {
     this.infoPanel.innerHTML = `
       <div class="single-unit-view">
         <div class="unit-header-row">
-          <span class="color-badge" style="background:${unit.color}"></span>
-          <h3>${unit.name}</h3>
-          <span class="role-tag">${unit.isEnemy ? 'Düşman' : 'Müttefik'}</span>
+          <span class="color-badge" style="background:${unit.color}; display:inline-block; width:12px; height:12px; border-radius:50%; margin-right:6px;"></span>
+          <strong>${unit.name}</strong>
+          <span style="font-size:10px; color:#e74c3c; margin-left:6px;">[${unit.isEnemy ? 'Düşman' : 'Müttefik'}]</span>
         </div>
-        <div class="stat-grid">
+        <div class="stat-grid" style="display:grid; grid-template-columns:1fr 1fr; gap:4px; font-size:11px; margin-top:6px;">
           <div><strong>HP:</strong> ${Math.round(unit.hp)} / ${unit.maxHp}</div>
-          <div><strong>Saldırı Gücü:</strong> ${unit.attackPower}</div>
+          <div><strong>Saldırı:</strong> ${unit.attackPower}</div>
           <div><strong>Hız:</strong> ${unit.speed}</div>
           <div><strong>Durum:</strong> ${unit.isDead ? 'Ölü' : 'Canlı'}</div>
         </div>
