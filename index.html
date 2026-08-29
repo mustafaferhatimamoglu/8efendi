@@ -1,0 +1,78 @@
+﻿<!DOCTYPE html>
+<html lang="tr">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>8efendi - 2D Strateji & Grup Yönetim Simülatörü</title>
+  <link rel="stylesheet" href="style.css">
+</head>
+<body>
+  <div class="app-container">
+    <!-- Üst Kontrol & Bilgi Çubuğu -->
+    <header class="game-header">
+      <div class="brand">
+        <h1>8EFENDİ</h1>
+        <span class="sub">2D Strateji & Grup Taktik Motoru</span>
+      </div>
+      <div class="header-controls">
+        <div class="control-group">
+          <label>Formasyon:</label>
+          <div class="btn-group">
+            <button class="formation-btn active" data-formation="box">Kutu (2x4)</button>
+            <button class="formation-btn" data-formation="wedge">V (Hücum)</button>
+            <button class="formation-btn" data-formation="line">Hat</button>
+            <button class="formation-btn" data-formation="circle">Çember</button>
+          </div>
+        </div>
+        <div class="btn-group">
+          <button id="btn-select-all" class="action-btn">Tümünü Seç (A)</button>
+          <button id="btn-cast-skill" class="action-btn accent">Yetenek Kullan (Q)</button>
+        </div>
+      </div>
+    </header>
+
+    <!-- Ana Oyun Sahnesi ve Detay Paneli -->
+    <main class="main-content">
+      <div class="canvas-wrapper">
+        <canvas id="gameCanvas"></canvas>
+        <div class="canvas-overlay-hints">
+          <span>🖱️ <strong>Sol Tık + Sürükle:</strong> Toplu Seçim</span>
+          <span>🖱️ <strong>Sağ Tık:</strong> Formasyonla İlerle</span>
+          <span>⌨️ <strong>1-8:</strong> Hızlı Seçim</span>
+        </div>
+      </div>
+
+      <aside class="sidebar-panel">
+        <div class="panel-section">
+          <h2>Seçili Birim Bilgisi</h2>
+          <div id="selected-info" class="info-content"></div>
+        </div>
+        <div class="panel-section help-section">
+          <h3>Taktik & İpuçları</h3>
+          <ul>
+            <li>Birimler hedefe varırken çarpışmayı önleyici <em>Separation</em> kuvveti uygular.</li>
+            <li>Formasyon yönü, grubun bulunduğu merkezden hedefe olan açıya göre otomatik döner.</li>
+            <li>Her birim kendi FSM (Durum Makinesi) durumunu anlık olarak başının üstünde gösterir.</li>
+          </ul>
+        </div>
+      </aside>
+    </main>
+
+    <!-- Alt Takım Portreleri / HUD -->
+    <footer class="party-hud">
+      <div class="hud-label">8 EFENDİ TAKIMI</div>
+      <div id="party-grid" class="party-grid"></div>
+    </footer>
+  </div>
+
+  <script type="module">
+    import { Engine } from './src/core/Engine.js';
+    try {
+      window.gameEngine = new Engine('gameCanvas');
+      console.log('8efendi Engine started successfully!');
+    } catch (e) {
+      console.error('Engine start error:', e);
+    }
+  </script>
+</body>
+</html>

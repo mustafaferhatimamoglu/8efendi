@@ -1,0 +1,361 @@
+﻿:root {
+  --bg-dark: #0f141d;
+  --bg-panel: #18202c;
+  --bg-card: #202b3b;
+  --bg-card-selected: #2d3d52;
+  --border-color: #2b394e;
+  --accent-color: #00d2d3;
+  --accent-hover: #01a3a4;
+  --text-main: #f1f2f6;
+  --text-muted: #a4b0be;
+  --hp-green: #2ecc71;
+  --energy-blue: #3498db;
+}
+
+* {
+  box-sizing: border-box;
+  margin: 0;
+  padding: 0;
+  user-select: none;
+}
+
+body {
+  font-family: 'Segoe UI', Roboto, Helvetica, Arial, sans-serif;
+  background-color: var(--bg-dark);
+  color: var(--text-main);
+  height: 100vh;
+  overflow: hidden;
+}
+
+.app-container {
+  display: flex;
+  flex-direction: column;
+  height: 100vh;
+}
+
+/* Header */
+.game-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 10px 24px;
+  background: var(--bg-panel);
+  border-bottom: 1px solid var(--border-color);
+}
+
+.brand h1 {
+  font-size: 20px;
+  letter-spacing: 2px;
+  color: #fff;
+  font-weight: 800;
+}
+
+.brand .sub {
+  font-size: 11px;
+  color: var(--accent-color);
+  text-transform: uppercase;
+  letter-spacing: 1px;
+}
+
+.header-controls {
+  display: flex;
+  gap: 20px;
+  align-items: center;
+}
+
+.control-group {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 13px;
+  color: var(--text-muted);
+}
+
+.btn-group {
+  display: flex;
+  gap: 6px;
+}
+
+button {
+  cursor: pointer;
+  border: 1px solid var(--border-color);
+  background: var(--bg-card);
+  color: var(--text-main);
+  padding: 6px 14px;
+  border-radius: 6px;
+  font-size: 12px;
+  font-weight: 600;
+  transition: all 0.2s ease;
+}
+
+button:hover {
+  background: #2b394e;
+  border-color: var(--accent-color);
+}
+
+button.active {
+  background: var(--accent-color);
+  color: #000;
+  border-color: var(--accent-color);
+}
+
+.action-btn.accent {
+  background: #e67e22;
+  border-color: #d35400;
+  color: #fff;
+}
+.action-btn.accent:hover {
+  background: #d35400;
+}
+
+/* Main Area */
+.main-content {
+  display: flex;
+  flex: 1;
+  min-height: 0;
+}
+
+.canvas-wrapper {
+  position: relative;
+  flex: 1;
+  background: radial-gradient(circle at center, #161f2c 0%, #0a0e14 100%);
+}
+
+#gameCanvas {
+  width: 100%;
+  height: 100%;
+  display: block;
+}
+
+.canvas-overlay-hints {
+  position: absolute;
+  top: 12px;
+  left: 12px;
+  display: flex;
+  gap: 16px;
+  background: rgba(15, 20, 29, 0.75);
+  backdrop-filter: blur(4px);
+  padding: 6px 14px;
+  border-radius: 6px;
+  border: 1px solid rgba(255, 255, 255, 0.1);
+  font-size: 12px;
+  color: var(--text-muted);
+  pointer-events: none;
+}
+
+/* Sidebar */
+.sidebar-panel {
+  width: 320px;
+  background: var(--bg-panel);
+  border-left: 1px solid var(--border-color);
+  display: flex;
+  flex-direction: column;
+  padding: 16px;
+  gap: 16px;
+  overflow-y: auto;
+}
+
+.panel-section h2 {
+  font-size: 14px;
+  color: var(--accent-color);
+  text-transform: uppercase;
+  margin-bottom: 12px;
+  border-bottom: 1px solid var(--border-color);
+  padding-bottom: 6px;
+}
+
+.panel-section h3 {
+  font-size: 13px;
+  margin-bottom: 8px;
+  color: #fff;
+}
+
+.info-content {
+  background: var(--bg-card);
+  border-radius: 8px;
+  padding: 12px;
+  font-size: 13px;
+}
+
+.empty-state {
+  text-align: center;
+  color: var(--text-muted);
+  padding: 20px 0;
+}
+
+.unit-header-row {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin-bottom: 8px;
+}
+
+.color-badge {
+  width: 14px;
+  height: 14px;
+  border-radius: 50%;
+  display: inline-block;
+}
+
+.role-tag {
+  background: #34495e;
+  padding: 2px 6px;
+  border-radius: 4px;
+  font-size: 10px;
+  margin-left: auto;
+}
+
+.unit-desc {
+  font-size: 12px;
+  color: var(--text-muted);
+  margin-bottom: 12px;
+}
+
+.stat-grid {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 8px;
+  background: rgba(0, 0, 0, 0.2);
+  padding: 8px;
+  border-radius: 6px;
+  font-size: 12px;
+}
+
+.skill-box {
+  margin-top: 12px;
+  background: rgba(230, 126, 34, 0.15);
+  border-left: 3px solid #e67e22;
+  padding: 8px;
+  border-radius: 4px;
+}
+
+.skill-name {
+  font-weight: bold;
+  font-size: 12px;
+  color: #f39c12;
+}
+
+.skill-details {
+  font-size: 11px;
+  color: var(--text-muted);
+}
+
+.help-section ul {
+  padding-left: 18px;
+  font-size: 12px;
+  color: var(--text-muted);
+  line-height: 1.5;
+}
+
+.selected-tags {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  margin-top: 10px;
+}
+
+.unit-pill {
+  background: #2b394e;
+  padding: 3px 8px;
+  border-radius: 4px;
+  font-size: 11px;
+}
+
+/* Footer HUD */
+.party-hud {
+  background: var(--bg-panel);
+  border-top: 1px solid var(--border-color);
+  padding: 10px 24px;
+}
+
+.hud-label {
+  font-size: 11px;
+  color: var(--text-muted);
+  letter-spacing: 1px;
+  margin-bottom: 6px;
+  font-weight: 700;
+}
+
+.party-grid {
+  display: grid;
+  grid-template-columns: repeat(8, 1fr);
+  gap: 10px;
+}
+
+.unit-card {
+  background: var(--bg-card);
+  border: 1px solid var(--border-color);
+  border-radius: 6px;
+  padding: 8px;
+  cursor: pointer;
+  transition: all 0.2s;
+}
+
+.unit-card:hover {
+  transform: translateY(-2px);
+  border-color: rgba(255, 255, 255, 0.3);
+}
+
+.unit-card.selected {
+  border-color: #2ecc71;
+  background: var(--bg-card-selected);
+  box-shadow: 0 0 10px rgba(46, 204, 113, 0.2);
+}
+
+.unit-card-header {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  margin-bottom: 2px;
+}
+
+.unit-key-badge {
+  font-size: 10px;
+  background: #111;
+  padding: 1px 4px;
+  border-radius: 3px;
+  color: #fff;
+}
+
+.unit-color-dot {
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+}
+
+.unit-card-name {
+  font-size: 11px;
+  font-weight: 700;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.unit-card-title {
+  font-size: 10px;
+  color: var(--text-muted);
+  margin-bottom: 6px;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.bar-container {
+  height: 4px;
+  background: #111;
+  border-radius: 2px;
+  overflow: hidden;
+  margin-bottom: 3px;
+}
+
+.bar-fill {
+  height: 100%;
+}
+
+.hp-bar {
+  background: var(--hp-green);
+}
+
+.energy-bar {
+  background: var(--energy-blue);
+}
