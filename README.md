@@ -1,6 +1,16 @@
-# ⚔️ 8efendi - 2D Çok Oyunculu Strateji & Grup Yönetim Oyunu
+﻿# ⚔️ 8efendi - 2D Çok Oyunculu Strateji & Grup Yönetim Oyunu
 
 8 farklı Türk/Bozkır temalı efendiden (**Alp Er, Demir Bey, Batur, Gökbörü, Kam Bilge, Karanlık Gölge, Ay Hatun, Kutluk Han**) oluşan bir ordunun gerçek zamanlı taktiksel yönetimini sağlayan, **WebRTC P2P (Sunucusuz / Dış IP'siz)** tabanlı **2D Çok Oyunculu (1v1 PvP / AI)** strateji oyunu.
+
+---
+
+## 🌐 Canlı Oyna (Netlify)
+
+Oyunu herhangi bir kuruluma veya indirmeye gerek kalmadan doğrudan tarayıcınız üzerinden oynayabilirsiniz:
+
+👉 **[https://8efendi.netlify.app](https://8efendi.netlify.app)**
+
+> **Not:** Kendi Netlify dağıtımınız için repo [https://github.com/mustafaferhatimamoglu/8efendi](https://github.com/mustafaferhatimamoglu/8efendi) adresiyle eşleştiğinde otomatik olarak yayına alınır.
 
 ---
 
@@ -27,31 +37,16 @@
 
 ---
 
-## 🚀 Netlify Üzerinde Yayınlama Rehberi (1 Dakikada Yayında!)
+## 🎮 Nasıl Oynanır? (Arkadaşınla 1v1 Savaş)
 
-Bu proje **%100 statik HTML/JS/CSS** ve **WebRTC P2P** mimarisi kullandığı için **Netlify üzerinde tamamen ücretsiz ve sıfır arka plan sunucu kurulumuyla** çalışır!
-
-### Adım Adım Netlify Kurulumu:
-
-1. **GitHub ile Bağlama (En Kolay Yol):**
-   - GitHub deponuzu güncelleyin (`git push`).
-   - [Netlify](https://www.netlify.com)'a giriş yapın ve **"Add new site" > "Import an existing project"** seçeneğini seçin.
-   - GitHub hesabınızdan `8efendi` reposunu seçin.
-   - **Publish directory:** `.` (veya boş bırakın).
-   - **Deploy site** butonuna tıklayın.
-
-2. **Sürükle-Bırak ile Yayınlama (Alternatif):**
-   - Netlify paneline girin, **Sites** sekmesinde `8efendi` proje klasörünüzü doğrudan tarayıcıya sürükleyip bırakın.
-   - Birkaç saniye içinde `https://projeniz.netlify.app` adresiniz hazır olacaktır!
-
-3. **Arkadaşınızla Oynama:**
-   - Netlify sitenize girin ve **"Oda Kur (Host Ol)"** butonuna tıklayın.
-   - **"Davet Linkini Kopyala"** butonuna basarak arkadaşınıza WhatsApp/Discord üzerinden linki gönderin.
-   - Arkadaşınız linke tıkladığı anda doğrudan sizin odanıza bağlanacak ve 1v1 savaş başlayacaktır!
+1. [https://8efendi.netlify.app](https://8efendi.netlify.app) adresine gidin.
+2. **"Oda Kur (Host Ol)"** butonuna tıklayın.
+3. Ekranda beliren **"Davet Linkini Kopyala"** butonuna basarak bağlantıyı arkadaşınıza gönderin.
+4. Arkadaşınız bağlantıyı açtığı anda doğrudan aynı arenaya bağlanır ve 1v1 meydan savaşı başlar!
 
 ---
 
-## 🎮 Kontroller & Kısayollar
+## 🕹️ Kontroller & Kısayollar
 
 | Kontrol | Eylem |
 |---|---|
@@ -63,18 +58,3 @@ Bu proje **%100 statik HTML/JS/CSS** ve **WebRTC P2P** mimarisi kullandığı i�
 | **A Tuşu** | Bütün takımı aynı anda seç. |
 | **Q Tuşu** | Seçili efendinin özel yeteneğini imlecin olduğu noktaya fırlat. |
 | **Formasyon Butonları** | Üst menüden takım düzenini değiştir (Kutu, V, Hat, Çember). |
-
----
-
-## 💻 Yerel Olarak Çalıştırma
-
-Projeyi yerel bilgisayarınızda test etmek için:
-
-```bash
-# Node.js yerel sunucusu ile:
-npm run dev
-# veya
-node server.js
-```
-
-Tarayıcınızda `http://localhost:3000` adresini açıp iki ayrı sekmede test edebilirsiniz.
