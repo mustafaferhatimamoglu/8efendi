@@ -1,4 +1,4 @@
-﻿import { BaseState } from '../StateMachine.js';
+import { BaseState } from '../StateMachine.js';
 
 export class SkillState extends BaseState {
   enter(prevState, params) {
@@ -12,7 +12,11 @@ export class SkillState extends BaseState {
     this.castTimer -= deltaTime;
     if (this.castTimer <= 0) {
       if (this.unit.party) {
-        this.unit.party.triggerSkillEffect(this.unit, this.skill, this.castTarget);
+        if (typeof this.unit.party.applySkillEffect === 'function') {
+          this.unit.party.applySkillEffect(this.unit, this.skill, this.castTarget);
+        } else if (typeof this.unit.party.triggerSkillEffect === 'function') {
+          this.unit.party.triggerSkillEffect(this.unit, this.skill, this.castTarget);
+        }
       }
       this.unit.fsm.changeState('IDLE');
     }

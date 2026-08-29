@@ -184,11 +184,22 @@ export class MultiplayerSync {
 
   // --- Gelen Paketleri Uygulama Fonksiyonları ---
 
+  // Karşı tarafın 1..8 olan yerel ID'lerini bizim 101..108 olan enemyUnit ID'lerine çevirir
+  toLocalEnemyId(remoteId) {
+    return remoteId <= 8 ? remoteId + 100 : remoteId;
+  }
+
+  // Karşı tarafın bizim birimlerimize saldırması için gönderdiği ID'yi yerel ID'ye çevirir
+  toLocalUnitId(remoteTargetId) {
+    return remoteTargetId > 100 ? remoteTargetId - 100 : remoteTargetId;
+  }
+
   handleRemoteMove(packet) {
     const enemyParty = this.engine.partyManager.getRemoteParty();
     if (!enemyParty) return;
 
-    enemyParty.applyRemoteMove(packet.unitIds, packet.target, packet.formation);
+    const mappedUnitIds = (packet.unitIds || []).map(id => this.toLocalEnemyId(id));
+    enemyParty.applyRemoteMove(mappedUnitIds, packet.target, packet.formation);
   }
 
   handleRemoteAttack(packet) {
@@ -196,10 +207,12 @@ export class MultiplayerSync {
     const localParty = this.engine.partyManager.getLocalParty();
     if (!enemyParty || !localParty) return;
 
-    const targetUnit = localParty.units.find(u => u.id === packet.targetUnitId);
+    const localTargetId = this.toLocalUnitId(packet.targetUnitId);
+    const targetUnit = localParty.units.find(u => u.id === localTargetId);
     if (!targetUnit) return;
 
-    packet.attackerIds.forEach(id => {
+    const mappedAttackerIds = (packet.attackerIds || []).map(id => this.toLocalEnemyId(id));
+    mappedAttackerIds.forEach(id => {
       const attacker = enemyParty.units.find(u => u.id === id);
       if (attacker && !attacker.isDead) {
         attacker.attack(targetUnit);
@@ -211,7 +224,8 @@ export class MultiplayerSync {
     const enemyParty = this.engine.partyManager.getRemoteParty();
     if (!enemyParty) return;
 
-    const unit = enemyParty.units.find(u => u.id === packet.unitId);
+    const mappedId = this.toLocalEnemyId(packet.unitId);
+    const unit = enemyParty.units.find(u => u.id === mappedId);
     if (unit && !unit.isDead) {
       unit.useSkill(packet.skillIndex, packet.target);
     }
@@ -219,14 +233,24 @@ export class MultiplayerSync {
 
   handleDamageEvent(packet) {
     // Hasarı doğru birime uygula
-    const targetParty = packet.isEnemyTarget
-      ? this.engine.partyManager.getLocalParty()
-      : this.engine.partyManager.getRemoteParty();
-
-    if (!targetParty) return;
-    const unit = targetParty.units.find(u => u.id === packet.targetId);
-    if (unit && !unit.isDead) {
-      unit.takeDamage(packet.amount, null, false); // false = tekrar ağa hasar paketi gönderme
+    if (packet.isEnemyTarget) {
+      // Karşı taraf kendi düşmanına (yani bizim yerel birimimize) hasar vurduğunu bildirdi
+      const localParty = this.engine.partyManager.getLocalParty();
+      if (!localParty) return;
+      const targetId = this.toLocalUnitId(packet.targetId);
+      const unit = localParty.units.find(u => u.id === targetId);
+      if (unit && !unit.isDead) {
+        unit.takeDamage(packet.amount, null, false);
+      }
+    } else {
+      // Karşı taraf kendi birimine hasar uygulandı
+      const enemyParty = this.engine.partyManager.getRemoteParty();
+      if (!enemyParty) return;
+      const enemyId = this.toLocalEnemyId(packet.targetId);
+      const unit = enemyParty.units.find(u => u.id === enemyId);
+      if (unit && !unit.isDead) {
+        unit.takeDamage(packet.amount, null, false);
+      }
     }
   }
 
@@ -235,7 +259,8 @@ export class MultiplayerSync {
     if (!enemyParty || !packet.units) return;
 
     packet.units.forEach(unitData => {
-      const unit = enemyParty.units.find(u => u.id === unitData.id);
+      const mappedId = this.toLocalEnemyId(unitData.id);
+      const unit = enemyParty.units.find(u => u.id === mappedId);
       if (unit) {
         // Yumuşak pozisyon interpolasyonu
         unit.targetInterpolation = {

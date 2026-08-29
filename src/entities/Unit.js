@@ -135,11 +135,6 @@ export class Unit {
 
     this.energy -= skill.cost;
     this.fsm.changeState('SKILL', { skill, target: targetPos });
-
-    // Efekt ve alan hasarı/şifası uygula
-    if (this.party) {
-      this.party.applySkillEffect(this, skill, targetPos);
-    }
     return true;
   }
 
