@@ -68,8 +68,9 @@ export class EnemySpawner {
   }
 
   spawnWave() {
-    // Sadece Host (veya Solo) düşman üretir
-    if (!this.party.isHost && !this.party.isSinglePlayerAI) return;
+    // Hem Host hem de Solo modunda spawner çalışır (Bağlı client'lar ise Host'tan senkronize alır veya fallback olarak çalışır)
+    const isMultiplayerClient = this.party.sync && this.party.sync.active && !this.party.isHost;
+    if (isMultiplayerClient) return;
 
     const count = Math.min(2 + Math.floor(this.waveNumber / 3), 6);
 

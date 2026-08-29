@@ -1,3 +1,5 @@
+﻿import { Unit } from '../entities/Unit.js';
+
 export const CoOpPacketType = {
   HANDSHAKE: 'handshake',
   PEER_MOVE: 'peer_move',
@@ -12,7 +14,7 @@ export class MultiplayerSync {
     this.engine = engine;
     this.network = networkManager;
     this.snapshotTimer = 0;
-    this.snapshotInterval = 0.08; // 80ms aralıklarla kesintisiz senkronizasyon
+    this.snapshotInterval = 0.06; // 60ms ultra-akıcı senkronizasyon
     this.active = false;
 
     this.bindNetworkEvents();
@@ -138,28 +140,27 @@ export class MultiplayerSync {
   }
 
   handleEnemySnapshot(packet) {
-    // Sadece Client'lar Host'tan gelen düşman konumlarını senkronize eder
-    if (this.network.isHost || !packet.enemies) return;
+    // Sadece Client'lar Host'tan gelen düşman konumlarını alır
+    if (this.engine.isHost || !packet.enemies) return;
 
     const currentEnemies = this.engine.partyManager.enemyUnits;
     const receivedIds = new Set(packet.enemies.map(e => e.id));
 
-    // 1. Host tarafında ölmüş/silinmiş düşmanları Client'ta da temizle
+    // 1. Ölmüş veya silinmiş düşmanları çıkar
     for (let i = currentEnemies.length - 1; i >= 0; i--) {
       if (!receivedIds.has(currentEnemies[i].id)) {
         currentEnemies.splice(i, 1);
       }
     }
 
-    // 2. Gelen düşmanları güncelle veya oluştur
+    // 2. Gelen tüm düşmanları canlı listeye ekle / güncelle
     packet.enemies.forEach(eData => {
       let enemy = currentEnemies.find(e => e.id === eData.id);
 
       if (!enemy && !eData.isDead) {
-        // Yeni doğan düşmanı oluştur
         enemy = new Unit({
           id: eData.id,
-          name: eData.name || 'Düşman',
+          name: eData.name || 'Bozkır Yaratığı',
           title: 'Canavar',
           classType: 'enemy_melee',
           color: eData.color || '#7f8c8d',
@@ -173,12 +174,12 @@ export class MultiplayerSync {
           y: eData.y,
           facingAngle: eData.facing || Math.PI
         });
+        enemy.hp = eData.hp;
         enemy.party = this.engine.partyManager;
         currentEnemies.push(enemy);
       }
 
       if (enemy) {
-        // Konum enterpolasyonu ve durum senkronizasyonu
         enemy.targetInterpolation = { x: eData.x, y: eData.y };
         enemy.hp = eData.hp;
         enemy.isDead = eData.isDead;
@@ -217,7 +218,7 @@ export class MultiplayerSync {
     });
 
     // 2. Eğer Host isek Düşmanları da Tüm Müttefiklere Kesintisiz Yayınla
-    if (this.network.isHost) {
+    if (this.engine.isHost) {
       const enemiesSnapshot = this.engine.partyManager.enemyUnits
         .filter(e => !e.isDead)
         .map(e => ({
