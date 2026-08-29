@@ -1,12 +1,16 @@
-/**
- * LobbyUI - Çok Oyunculu Lobi ve Oda Yönetim Arayüzü
+﻿/**
+ * LobbyUI - Çok Oyunculu Lobi, Karakter Seçimi ve Oda Yönetim Arayüzü
  */
 import { EventBus } from '../core/EventBus.js';
+import { AVAILABLE_CLASSES, EFENDI_DATA } from '../config/UnitDatabase.js';
 
 export class LobbyUI {
   constructor(engine, networkManager) {
     this.engine = engine;
     this.network = networkManager;
+
+    // Seçilen 8 Karakter Listesi (Varsayılan olarak EFENDI_DATA'dan başlar)
+    this.selectedRoster = JSON.parse(JSON.stringify(EFENDI_DATA));
 
     this.modal = document.getElementById('lobby-modal');
     this.hostBtn = document.getElementById('btn-lobby-host');
@@ -20,8 +24,67 @@ export class LobbyUI {
     this.lobbyStatus = document.getElementById('lobby-status');
     this.openLobbyBtn = document.getElementById('btn-open-lobby');
 
+    this.renderCharacterSelectors();
     this.bindEvents();
     this.checkUrlAutoJoin();
+  }
+
+  renderCharacterSelectors() {
+    const container = document.getElementById('character-selection-container');
+    if (!container) return;
+
+    container.innerHTML = '';
+
+    this.selectedRoster.forEach((unit, index) => {
+      const slotCard = document.createElement('div');
+      slotCard.className = 'char-select-card';
+
+      const label = document.createElement('div');
+      label.className = 'char-slot-label';
+      label.textContent = `${index + 1}. Efendi`;
+
+      const select = document.createElement('select');
+      select.className = 'char-dropdown';
+
+      AVAILABLE_CLASSES.forEach(cls => {
+        const option = document.createElement('option');
+        option.value = cls.classType;
+        option.textContent = cls.label;
+        if (unit.classType === cls.classType) {
+          option.selected = true;
+        }
+        select.appendChild(option);
+      });
+
+      select.addEventListener('change', (e) => {
+        const selectedClassType = e.target.value;
+        const clsData = AVAILABLE_CLASSES.find(c => c.classType === selectedClassType);
+        if (clsData) {
+          this.selectedRoster[index] = {
+            id: index + 1,
+            name: `${clsData.label.split(' ')[1]}-${index + 1}`,
+            title: clsData.label,
+            classType: clsData.classType,
+            color: clsData.color,
+            radius: clsData.radius,
+            maxHp: clsData.maxHp,
+            speed: clsData.speed,
+            attackPower: clsData.attackPower,
+            attackRange: clsData.attackRange,
+            description: clsData.description
+          };
+          this.applySelectedRoster();
+        }
+      });
+
+      slotCard.appendChild(label);
+      slotCard.appendChild(select);
+      container.appendChild(slotCard);
+    });
+  }
+
+  applySelectedRoster() {
+    this.engine.partyManager.setCustomRoster(this.selectedRoster);
   }
 
   bindEvents() {
@@ -29,6 +92,7 @@ export class LobbyUI {
     if (this.hostBtn) {
       this.hostBtn.addEventListener('click', async () => {
         try {
+          this.applySelectedRoster();
           this.setStatus('Oda oluşturuluyor, lütfen bekleyin...', 'info');
           const roomId = await this.engine.hostMultiplayerGame();
           this.hostRoomDisplay.textContent = roomId;
@@ -49,6 +113,7 @@ export class LobbyUI {
           return;
         }
         try {
+          this.applySelectedRoster();
           this.setStatus('Odaya bağlanılıyor...', 'info');
           await this.engine.joinMultiplayerGame(code);
           this.setStatus('Odaya bağlanıldı! Oyun başlıyor...', 'success');
@@ -62,6 +127,7 @@ export class LobbyUI {
     // Tek Oyunculu Oyna
     if (this.soloBtn) {
       this.soloBtn.addEventListener('click', () => {
+        this.applySelectedRoster();
         this.engine.startSoloGame();
         this.hideModal();
       });
@@ -97,12 +163,12 @@ export class LobbyUI {
 
     // Ağ olayları
     this.network.on('onConnect', () => {
-      this.setStatus('Rakip bağlandı! Savaş başlıyor...', 'success');
+      this.setStatus('Müttefik bağlandı! Savaş başlıyor...', 'success');
       setTimeout(() => this.hideModal(), 1000);
     });
 
     this.network.on('onDisconnect', () => {
-      this.setStatus('Rakibin bağlantısı koptu.', 'error');
+      this.setStatus('Müttefikin bağlantısı koptu.', 'error');
     });
   }
 
@@ -116,6 +182,7 @@ export class LobbyUI {
       }
       this.setStatus(`URL'den oda kodu algılandı: ${roomCode}. Bağlanılıyor...`, 'info');
       setTimeout(() => {
+        this.applySelectedRoster();
         this.engine.joinMultiplayerGame(roomCode)
           .then(() => {
             this.setStatus('Bağlantı başarılı!', 'success');

@@ -1,16 +1,16 @@
-import { Unit } from './Unit.js';
-import { EFENDI_DATA } from '../config/UnitDatabase.js';
-import { FormationManager, FormationType } from '../navigation/FormationManager.js';
+﻿import { FormationManager, FormationType } from '../navigation/FormationManager.js';
 import { Vector2D } from '../navigation/Vector2D.js';
+import { Unit } from './Unit.js';
+import { EFENDI_DATA, AVAILABLE_CLASSES } from '../config/UnitDatabase.js';
 import { EventBus } from '../core/EventBus.js';
 import { ProjectileManager } from '../combat/ProjectileManager.js';
 import { EnemySpawner } from '../combat/EnemySpawner.js';
 
 export class PartyManager {
   constructor() {
-    this.units = []; // Yerel oyuncunun 8 Efendisi
-    this.peerParties = new Map(); // Diğer bağlı oyuncuların partileri (peerId -> Unit[])
-    this.enemyUnits = []; // Haritadaki tüm aktif düşmanlar
+    this.units = [];
+    this.peerParties = new Map(); // peerId -> Unit[]
+    this.enemyUnits = [];
     this.selectedUnits = [];
     this.currentFormation = FormationType.BOX;
     this.targetMarker = null;
@@ -21,11 +21,20 @@ export class PartyManager {
     this.isHost = true;
     this.matchFinished = false;
 
+    // Özel Seçilmiş 8 Karakter Konfigürasyonu
+    this.customRoster = [...EFENDI_DATA];
+
     // Savaş ve Spawner Alt Sistemleri
     this.projectiles = new ProjectileManager();
     this.spawner = new EnemySpawner(this);
 
     this.initParties(true, true);
+  }
+
+  setCustomRoster(roster) {
+    if (roster && roster.length === 8) {
+      this.customRoster = roster;
+    }
   }
 
   setSync(sync) {
@@ -55,11 +64,12 @@ export class PartyManager {
       44
     );
 
-    // Yerel 8 Efendiyi oluştur
-    this.units = EFENDI_DATA.map((data, index) => {
+    // Seçilmiş 8 Efendiyi oluştur
+    this.units = this.customRoster.map((data, index) => {
       const slot = localSlots[index] || new Vector2D(myStartX, myStartY);
       const unit = new Unit({
         ...data,
+        id: index + 1,
         teamId: 'player',
         isEnemy: false,
         x: slot.x,
@@ -77,7 +87,7 @@ export class PartyManager {
   /**
    * Yeni bağlanan bir uzaktaki oyuncu için 8 Efendi ekler (Co-op 1-64 oyuncu).
    */
-  addPeerParty(peerId, peerName = 'Müttefik') {
+  addPeerParty(peerId, peerName = 'Müttefik', customUnits = null) {
     if (this.peerParties.has(peerId)) return;
 
     const offsetIndex = this.peerParties.size + 1;
@@ -92,11 +102,12 @@ export class PartyManager {
       38
     );
 
-    const peerUnits = EFENDI_DATA.map((data, index) => {
+    const rosterToUse = customUnits || EFENDI_DATA;
+    const peerUnits = rosterToUse.map((data, index) => {
       const slot = slots[index] || new Vector2D(spawnX, spawnY);
       const unit = new Unit({
         ...data,
-        id: 10000 + (offsetIndex * 100) + data.id,
+        id: 10000 + (offsetIndex * 100) + (index + 1),
         teamId: `peer_${peerId}`,
         ownerPeerId: peerId,
         isEnemy: false,
@@ -113,16 +124,16 @@ export class PartyManager {
     EventBus.emit('peer:joined', { peerId, peerUnits });
   }
 
+  getPeerColor(index) {
+    const colors = ['#3498db', '#9b59b6', '#e67e22', '#1abc9c', '#e84393', '#fdcb6e'];
+    return colors[index % colors.length];
+  }
+
   removePeerParty(peerId) {
     if (this.peerParties.has(peerId)) {
       this.peerParties.delete(peerId);
       EventBus.emit('peer:left', { peerId });
     }
-  }
-
-  getPeerColor(index) {
-    const colors = ['#3498db', '#9b59b6', '#1abc9c', '#f39c12', '#e67e22', '#2ecc71'];
-    return colors[index % colors.length];
   }
 
   getAllUnits() {
@@ -190,7 +201,6 @@ export class PartyManager {
   selectGuardians() {
     this.clearSelection();
     this.units.forEach(unit => {
-      // 1 ve 2 numaralı Muhafızlar (veya GUARDIAN sınıfı)
       if (!unit.isDead && (unit.classType === 'guardian' || unit.id === 1 || unit.id === 2)) {
         unit.isSelected = true;
         this.selectedUnits.push(unit);
@@ -202,7 +212,6 @@ export class PartyManager {
   selectBackline() {
     this.clearSelection();
     this.units.forEach(unit => {
-      // 3'ten 8'e kadar olan diğer karakterler (Okçular, Büyücüler, Şifacılar)
       if (!unit.isDead && unit.classType !== 'guardian' && unit.id !== 1 && unit.id !== 2) {
         unit.isSelected = true;
         this.selectedUnits.push(unit);
@@ -233,76 +242,81 @@ export class PartyManager {
     EventBus.emit('formation:changed', type);
   }
 
-  /**
-   * Seçili birimleri akıllı formasyon ile hedef noktaya yönlendirir.
-   */
-  commandMove(targetPos) {
-    if (this.selectedUnits.length === 0) return;
+  moveSelectedUnits(targetPos) {
+    const selected = this.selectedUnits.filter(u => !u.isDead);
+    if (selected.length === 0) return;
 
     this.targetMarker = targetPos.clone();
-    this.targetMarkerTimer = 1.0;
+    this.targetMarkerTimer = 0.8;
 
-    let centerX = 0;
-    let centerY = 0;
-    this.selectedUnits.forEach(u => {
-      centerX += u.position.x;
-      centerY += u.position.y;
-    });
-    centerX /= this.selectedUnits.length;
-    centerY /= this.selectedUnits.length;
-    const groupCenter = new Vector2D(centerX, centerY);
+    let center = new Vector2D(0, 0);
+    selected.forEach(u => center.add(u.position));
+    center.div(selected.length);
 
-    const moveDir = Vector2D.sub(targetPos, groupCenter);
-    const facingAngle = moveDir.magSq() > 1 ? moveDir.heading() + Math.PI / 2 : 0;
+    let facingAngle = Vector2D.sub(targetPos, center).heading();
+    if (isNaN(facingAngle)) facingAngle = 0;
 
     const slots = FormationManager.calculateFormationSlots(
       targetPos,
       facingAngle,
-      this.selectedUnits.length,
+      selected.length,
       this.currentFormation,
       38
     );
 
-    const availableSlots = [...slots];
-    const unitIds = [];
-
-    this.selectedUnits.forEach(unit => {
-      unitIds.push(unit.id);
-      let closestSlotIndex = 0;
-      let minDistance = Infinity;
-
-      availableSlots.forEach((slot, index) => {
-        const d = unit.position.dist(slot);
-        if (d < minDistance) {
-          minDistance = d;
-          closestSlotIndex = index;
-        }
-      });
-
-      const assignedSlot = availableSlots.splice(closestSlotIndex, 1)[0] || targetPos;
-      unit.moveTo(assignedSlot);
+    const assignments = FormationManager.assignSlotsOptimally(selected, slots);
+    assignments.forEach(({ unit, slot }) => {
+      unit.moveTo(slot);
     });
 
-    if (this.sync) {
-      this.sync.sendMoveCommand(unitIds, targetPos, this.currentFormation);
+    if (this.sync && this.sync.active) {
+      const selectedIds = selected.map(u => u.id);
+      this.sync.sendMoveCommand(selectedIds, targetPos, this.currentFormation);
     }
   }
 
-  /**
-   * Seçili birimlerin bir düşman hedefine odaklanmasını sağlar.
-   */
-  commandAttack(enemyUnit) {
-    if (this.selectedUnits.length === 0 || !enemyUnit || enemyUnit.isDead) return;
+  attackTargetWithSelected(targetUnit) {
+    const selected = this.selectedUnits.filter(u => !u.isDead);
+    if (selected.length === 0 || !targetUnit || targetUnit.isDead) return;
 
-    this.selectedUnits.forEach(unit => {
-      if (!unit.isDead) {
-        unit.attack(enemyUnit);
-      }
+    this.targetMarker = targetUnit.position.clone();
+    this.targetMarkerTimer = 0.8;
+
+    selected.forEach(unit => {
+      unit.attack(targetUnit);
+    });
+  }
+
+  handleRemoteMove(peerId, unitIds, targetPos, formation) {
+    const peerUnits = this.peerParties.get(peerId);
+    if (!peerUnits) return;
+
+    const targetVector = new Vector2D(targetPos.x, targetPos.y);
+    const movingUnits = peerUnits.filter(u => unitIds.includes(u.id) && !u.isDead);
+    if (movingUnits.length === 0) return;
+
+    let center = new Vector2D(0, 0);
+    movingUnits.forEach(u => center.add(u.position));
+    center.div(movingUnits.length);
+
+    let facingAngle = Vector2D.sub(targetVector, center).heading();
+    if (isNaN(facingAngle)) facingAngle = 0;
+
+    const slots = FormationManager.calculateFormationSlots(
+      targetVector,
+      facingAngle,
+      movingUnits.length,
+      formation || FormationType.BOX,
+      38
+    );
+
+    const assignments = FormationManager.assignSlotsOptimally(movingUnits, slots);
+    assignments.forEach(({ unit, slot }) => {
+      unit.moveTo(slot);
     });
   }
 
   checkTeamStatus() {
-    // Canlı oyuncu birimlerini kontrol et
     const aliveLocal = this.units.filter(u => !u.isDead).length;
     const totalAllies = this.getAlliedUnits().filter(u => !u.isDead).length;
 
@@ -338,42 +352,46 @@ export class PartyManager {
     }
 
     // 4. Mermiler ve Spawner
-    this.projectiles.update(deltaTime);
+    this.projectiles.update(deltaTime, this);
     this.spawner.update(deltaTime);
 
+    // 5. Hedef İşaretçisi Süresi
     if (this.targetMarkerTimer > 0) {
       this.targetMarkerTimer -= deltaTime;
-      if (this.targetMarkerTimer <= 0) this.targetMarker = null;
+      if (this.targetMarkerTimer <= 0) {
+        this.targetMarker = null;
+      }
     }
   }
 
   render(ctx) {
-    // Spawner Portalı
-    this.spawner.render(ctx);
-
-    // Tıklanan hedef bayrağı
-    if (this.targetMarker) {
+    // Hedef tıklama halkası (Yeşil dalga)
+    if (this.targetMarker && this.targetMarkerTimer > 0) {
       ctx.save();
-      ctx.strokeStyle = '#00d2d3';
+      const progress = 1 - (this.targetMarkerTimer / 0.8);
+      ctx.strokeStyle = `rgba(46, 204, 113, ${1 - progress})`;
       ctx.lineWidth = 2;
       ctx.beginPath();
-      ctx.arc(this.targetMarker.x, this.targetMarker.y, 8 + (1 - this.targetMarkerTimer) * 12, 0, Math.PI * 2);
+      ctx.arc(this.targetMarker.x, this.targetMarker.y, 8 + progress * 20, 0, Math.PI * 2);
       ctx.stroke();
       ctx.restore();
     }
 
-    // Düşmanlar
-    this.enemyUnits.forEach(u => u.render(ctx));
+    // Spawner Kapısı (Portal)
+    this.spawner.render(ctx);
 
-    // Müttefik Oyuncuların Birimleri
+    // Mermiler (Oklar ve Alev Topları)
+    this.projectiles.render(ctx);
+
+    // Düşmanlar
+    this.enemyUnits.forEach(enemy => enemy.render(ctx));
+
+    // Müttefik Diğer Oyuncuların Orduları
     for (const peerUnits of this.peerParties.values()) {
       peerUnits.forEach(u => u.render(ctx));
     }
 
-    // Yerel Oyuncu Birimleri
+    // Yerel Oyuncunun 8 Efendisi
     this.units.forEach(u => u.render(ctx));
-
-    // Mermiler (Oklar ve Alev Topları)
-    this.projectiles.render(ctx);
   }
 }
