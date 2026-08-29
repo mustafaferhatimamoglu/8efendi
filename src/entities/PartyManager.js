@@ -1,10 +1,12 @@
-﻿import { FormationManager, FormationType } from '../navigation/FormationManager.js';
+import { FormationManager, FormationType } from '../navigation/FormationManager.js';
 import { Vector2D } from '../navigation/Vector2D.js';
 import { Unit } from './Unit.js';
 import { EFENDI_DATA, AVAILABLE_CLASSES } from '../config/UnitDatabase.js';
 import { EventBus } from '../core/EventBus.js';
 import { ProjectileManager } from '../combat/ProjectileManager.js';
 import { EnemySpawner } from '../combat/EnemySpawner.js';
+import { OpenWorldSpawner } from '../combat/OpenWorldSpawner.js';
+import { MapManager } from '../world/MapManager.js';
 
 export class PartyManager {
   constructor() {
@@ -19,21 +21,47 @@ export class PartyManager {
     this.sync = null; // MultiplayerSync referansı
     this.isSinglePlayerAI = true; // Solo PvE varsayılan
     this.isHost = true;
+    this.gameMode = 'solo'; // 'solo' | 'coop' | 'openworld'
     this.matchFinished = false;
 
-    // Özel Seçilmiş 8 Karakter Konfigürasyonu
-    this.customRoster = [...EFENDI_DATA];
+    // Özel Seçilmiş 8 Karakter Konfigürasyonu (Son Tercihleri Yükle)
+    this.customRoster = this.loadSavedRoster();
 
-    // Savaş ve Spawner Alt Sistemleri
+    // Harita ve Savaş Alt Sistemleri
+    this.mapManager = null;
     this.projectiles = new ProjectileManager();
     this.spawner = new EnemySpawner(this);
 
-    this.initParties(true, true);
+    this.initParties(true, true, false);
+  }
+
+  loadSavedRoster() {
+    try {
+      if (typeof localStorage !== 'undefined') {
+        const saved = localStorage.getItem('8efendi_roster_preferences');
+        if (saved) {
+          const parsed = JSON.parse(saved);
+          if (Array.isArray(parsed) && parsed.length === 8) {
+            return parsed;
+          }
+        }
+      }
+    } catch (e) {
+      console.warn('Could not load saved roster preferences', e);
+    }
+    return [...EFENDI_DATA];
   }
 
   setCustomRoster(roster) {
     if (roster && roster.length === 8) {
       this.customRoster = roster;
+      try {
+        if (typeof localStorage !== 'undefined') {
+          localStorage.setItem('8efendi_roster_preferences', JSON.stringify(roster));
+        }
+      } catch (e) {
+        console.warn('Could not save roster preferences', e);
+      }
     }
   }
 
@@ -41,19 +69,29 @@ export class PartyManager {
     this.sync = sync;
   }
 
-  initParties(isHost = true, isSinglePlayer = true) {
+  initParties(isHost = true, isSinglePlayer = true, isOpenWorld = false) {
     this.isHost = isHost;
     this.isSinglePlayerAI = isSinglePlayer;
+    this.gameMode = isOpenWorld ? 'openworld' : (isSinglePlayer ? 'solo' : 'coop');
     this.matchFinished = false;
     this.effects = [];
     this.enemyUnits = [];
     this.peerParties.clear();
     this.projectiles.clear();
 
-    // Başlangıç konumu: Sol taraf (Savunma hattı)
-    const myStartX = 180;
-    const myStartY = 320;
-    const myFacing = 0;
+    if (isOpenWorld) {
+      this.mapManager = new MapManager(4800, 3600);
+      this.spawner = new OpenWorldSpawner(this);
+    } else {
+      this.mapManager = null;
+      this.spawner = new EnemySpawner(this);
+    }
+
+    // Başlangıç konumu:
+    // Açık Dünya için Jangan Kalesi İçi (3680, 1440), Dalga Modu için Sol Taraf (180, 320)
+    const myStartX = isOpenWorld ? 3680 : 180;
+    const myStartY = isOpenWorld ? 1440 : 320;
+    const myFacing = isOpenWorld ? Math.PI : 0;
 
     // Yerel Takım slotları
     const localSlots = FormationManager.calculateFormationSlots(
@@ -72,6 +110,7 @@ export class PartyManager {
         id: index + 1,
         teamId: 'player',
         isEnemy: false,
+        speed: data.speed,
         x: slot.x,
         y: slot.y,
         facingAngle: myFacing
@@ -80,8 +119,35 @@ export class PartyManager {
       return unit;
     });
 
+    if (isOpenWorld) {
+      // Spawner'lar için canavarları hazırla
+      this.spawner.initialSpawn();
+    }
+
     this.selectAll();
     EventBus.emit('units:initialized', { local: this.units, enemy: this.enemyUnits });
+  }
+
+  /**
+   * 8 Efendinin (tüm oyuncu takımının) ağırlık merkezini hesaplar.
+   * Seçimden bağımsız olarak her zaman 8 karakterin tamamını ortalar.
+   */
+  getPartyCenter() {
+    const aliveUnits = this.units.filter(u => !u.isDead);
+    const group = aliveUnits.length > 0 ? aliveUnits : this.units;
+
+    if (group.length === 0) {
+      return new Vector2D(3680, 1440);
+    }
+
+    let cx = 0;
+    let cy = 0;
+    group.forEach(u => {
+      cx += u.position.x;
+      cy += u.position.y;
+    });
+
+    return new Vector2D(cx / group.length, cy / group.length);
   }
 
   /**
@@ -290,6 +356,14 @@ export class PartyManager {
     });
   }
 
+  commandMove(targetPos, customFacingAngle = null) {
+    this.moveSelectedUnits(targetPos, customFacingAngle);
+  }
+
+  commandAttack(targetUnit) {
+    this.attackTargetWithSelected(targetUnit);
+  }
+
   handleRemoteMove(peerId, unitIds, targetPos, formation) {
     const peerUnits = this.peerParties.get(peerId);
     if (!peerUnits) return;
@@ -328,7 +402,7 @@ export class PartyManager {
       aliveLocal,
       totalAllies,
       enemyCount: this.enemyUnits.filter(u => !u.isDead).length,
-      wave: this.spawner.waveNumber
+      wave: this.spawner && this.spawner.waveNumber ? this.spawner.waveNumber : (this.gameMode === 'openworld' ? '5 Bölge' : 1)
     });
 
     if (totalAllies === 0 && !this.matchFinished) {

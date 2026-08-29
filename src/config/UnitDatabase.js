@@ -1,4 +1,4 @@
-﻿export const UnitClasses = {
+export const UnitClasses = {
   GUARDIAN: 'guardian',   // Yüksek Canlı Ağır Savunma / Yakın Dövüş
   ARCHER: 'archer',       // 5x Menzilli Fiziksel Saldırı (Ok)
   MAGE: 'mage',           // 5x Menzilli Büyü Saldırısı (Alev Topu)
@@ -16,7 +16,7 @@ export const AVAILABLE_CLASSES = [
     speed: 2.6,
     attackPower: 22,
     attackRange: 45,
-    description: '650 HP, geniş alan ittirmesi (Knockback), %50 can altında 5s %75 çelik kalkan.'
+    description: '650 HP, geniş alan ittirmesi (Knockback), %50 can altında 5s %75 çelik kalkan (5s cooldown).'
   },
   {
     classType: UnitClasses.ARCHER,

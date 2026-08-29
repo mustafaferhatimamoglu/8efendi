@@ -1,4 +1,4 @@
-﻿/**
+/**
  * LobbyUI - Çok Oyunculu Lobi, Karakter Seçimi ve Oda Yönetim Arayüzü
  */
 import { EventBus } from '../core/EventBus.js';
@@ -9,10 +9,11 @@ export class LobbyUI {
     this.engine = engine;
     this.network = networkManager;
 
-    // Seçilen 8 Karakter Listesi (Varsayılan olarak EFENDI_DATA'dan başlar)
-    this.selectedRoster = JSON.parse(JSON.stringify(EFENDI_DATA));
+    // Seçilen 8 Karakter Listesi (Son Tercihleri Yükle veya Varsayılandan Başla)
+    this.selectedRoster = this.loadSavedPreferences();
 
     this.modal = document.getElementById('lobby-modal');
+    this.openWorldBtn = document.getElementById('btn-lobby-openworld');
     this.hostBtn = document.getElementById('btn-lobby-host');
     this.joinBtn = document.getElementById('btn-lobby-join');
     this.soloBtn = document.getElementById('btn-lobby-solo');
@@ -25,8 +26,36 @@ export class LobbyUI {
     this.openLobbyBtn = document.getElementById('btn-open-lobby');
 
     this.renderCharacterSelectors();
+    this.applySelectedRoster();
     this.bindEvents();
     this.checkUrlAutoJoin();
+  }
+
+  loadSavedPreferences() {
+    try {
+      if (typeof localStorage !== 'undefined') {
+        const saved = localStorage.getItem('8efendi_roster_preferences');
+        if (saved) {
+          const parsed = JSON.parse(saved);
+          if (Array.isArray(parsed) && parsed.length === 8) {
+            return parsed;
+          }
+        }
+      }
+    } catch (e) {
+      console.warn('Could not load saved roster preferences in LobbyUI', e);
+    }
+    return JSON.parse(JSON.stringify(EFENDI_DATA));
+  }
+
+  savePreferences() {
+    try {
+      if (typeof localStorage !== 'undefined') {
+        localStorage.setItem('8efendi_roster_preferences', JSON.stringify(this.selectedRoster));
+      }
+    } catch (e) {
+      console.warn('Could not save roster preferences in LobbyUI', e);
+    }
   }
 
   renderCharacterSelectors() {
@@ -73,6 +102,7 @@ export class LobbyUI {
             attackRange: clsData.attackRange,
             description: clsData.description
           };
+          this.savePreferences();
           this.applySelectedRoster();
         }
       });
@@ -84,6 +114,7 @@ export class LobbyUI {
   }
 
   applySelectedRoster() {
+    this.savePreferences();
     this.engine.partyManager.setCustomRoster(this.selectedRoster);
   }
 
@@ -121,6 +152,15 @@ export class LobbyUI {
         } catch (err) {
           this.setStatus(`Bağlantı hatası: ${err.message}`, 'error');
         }
+      });
+    }
+
+    // Açık Dünya (OpenWorld) Oyna
+    if (this.openWorldBtn) {
+      this.openWorldBtn.addEventListener('click', () => {
+        this.applySelectedRoster();
+        this.engine.startOpenWorldGame();
+        this.hideModal();
       });
     }
 

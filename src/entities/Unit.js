@@ -1,10 +1,12 @@
-﻿import { Vector2D } from '../navigation/Vector2D.js';
+import { Vector2D } from '../navigation/Vector2D.js';
 import { StateMachine } from '../fsm/StateMachine.js';
 import { IdleState } from '../fsm/states/IdleState.js';
 import { MoveState } from '../fsm/states/MoveState.js';
 import { AttackState } from '../fsm/states/AttackState.js';
 import { SkillState } from '../fsm/states/SkillState.js';
 import { UnitClasses } from '../config/UnitDatabase.js';
+import { AssetManager } from '../core/AssetManager.js';
+import { Pathfinder } from '../navigation/Pathfinder.js';
 
 export class Unit {
   constructor(config) {
@@ -14,6 +16,12 @@ export class Unit {
     this.classType = config.classType || UnitClasses.WARRIOR;
     this.color = config.color || '#3498db';
     this.radius = config.radius || 14;
+    this.spriteKey = config.spriteKey || null;
+    this.monsterLevel = config.monsterLevel || null;
+    this.waypoints = [];
+    this.isAggroed = false;
+    this.aggroTarget = null;
+    this.aggroTable = new Map(); // Oyuncu ID -> Tehdit (Aggro) Puanı
 
     // Takım ve Sahiplik
     this.teamId = config.teamId || 'player';
@@ -124,6 +132,11 @@ export class Unit {
       this.position.add(this.velocity);
       this.acceleration.set(0, 0);
 
+      // Duvarlarla Çarpışma Çözümlemesi (Karakterler duvarların içinden geçemez!)
+      if (this.party && this.party.mapManager) {
+        this.party.mapManager.resolveCircleCollision(this.position, this.radius);
+      }
+
       // Yön açısı güncelleme
       if (this.velocity.magSq() > 0.05) {
         this.facingAngle = this.velocity.heading();
@@ -175,7 +188,7 @@ export class Unit {
 
   activateGuardianShield() {
     this.shieldActiveTimer = 5.0; // 5 saniye boyunca %75 hasar koruması
-    this.shieldCooldown = 10.0;   // 10 saniye bekleme süresi
+    this.shieldCooldown = 5.0;    // 5 saniye bekleme süresi (5s cooldown)
     this.floatingTexts.push({
       text: '🛡️ ÇELİK KALKAN!',
       color: '#f1c40f',
@@ -217,56 +230,81 @@ export class Unit {
     }
 
     // Saldırı Sınıfları: Düşman Tarama ve Otomatik Saldırı (Menzilde ise)
-    if (this.attackCooldown <= 0) {
-      if (this.isEnemy) {
-        this.performEnemyAttack();
-      } else {
+    if (this.isEnemy) {
+      this.performEnemyBehavior(deltaTime);
+    } else {
+      if (this.attackCooldown <= 0) {
         this.performPlayerAttack();
       }
     }
   }
 
+  /**
+   * Şifacı: Kendini ve müttefiklerini otomatik iyileştirir.
+   */
   performAutoHeal() {
     const allies = this.party.getAlliedUnits();
-    let lowestAlly = null;
+    let lowestTarget = null;
     let lowestHpPercent = 1.0;
 
     allies.forEach(ally => {
       if (!ally.isDead) {
-        const dist = this.position.dist(ally.position);
+        const isSelf = (ally === this);
+        const dist = isSelf ? 0 : this.position.dist(ally.position);
+
         if (dist <= this.attackRange) {
+          // Duvar arkası kontrolü (kendi için LoS kontrolüne gerek yok)
+          if (!isSelf && this.party.mapManager && !this.party.mapManager.hasLineOfSight(this.position, ally.position)) {
+            return;
+          }
+
           const hpPercent = ally.hp / ally.maxHp;
           if (hpPercent < lowestHpPercent && hpPercent < 0.95) {
             lowestHpPercent = hpPercent;
-            lowestAlly = ally;
+            lowestTarget = ally;
           }
         }
       }
     });
 
-    if (lowestAlly) {
+    if (lowestTarget) {
       const healAmount = 70;
-      lowestAlly.heal(healAmount);
-      this.healBeamTarget = lowestAlly;
+      lowestTarget.heal(healAmount);
+      this.healBeamTarget = lowestTarget;
       this.healBeamTimer = 0.3;
       this.attackCooldown = 0.5; // 0.5s Cooldown
-      this.facingAngle = Vector2D.sub(lowestAlly.position, this.position).heading();
+      if (lowestTarget !== this) {
+        this.facingAngle = Vector2D.sub(lowestTarget.position, this.position).heading();
+      }
     }
   }
 
+  /**
+   * Oyuncu Birimi Saldırısı: Duvar arkasındaki hedeflere ateş edilemez!
+   */
   performPlayerAttack() {
     const enemies = this.party.getEnemyUnits();
     let closestEnemy = null;
     let minDist = this.attackRange;
 
-    // Eğer manuel hedef seçilmişse onu önceliklendir
-    if (this.attackTarget && !this.attackTarget.isDead && this.position.dist(this.attackTarget.position) <= this.attackRange) {
-      closestEnemy = this.attackTarget;
-    } else {
+    // Manuel hedef seçilmişse ve duvar arkasında değilse
+    if (this.attackTarget && !this.attackTarget.isDead) {
+      const d = this.position.dist(this.attackTarget.position);
+      const hasLOS = !this.party.mapManager || this.party.mapManager.hasLineOfSight(this.position, this.attackTarget.position);
+      if (d <= this.attackRange && hasLOS) {
+        closestEnemy = this.attackTarget;
+      }
+    }
+
+    if (!closestEnemy) {
       enemies.forEach(enemy => {
         if (!enemy.isDead) {
           const d = this.position.dist(enemy.position);
           if (d <= minDist) {
+            // Duvar arkasında mı kontrol et
+            if (this.party.mapManager && !this.party.mapManager.hasLineOfSight(this.position, enemy.position)) {
+              return; // Duvar arkasındaki düşmana ateş edilemez!
+            }
             minDist = d;
             closestEnemy = enemy;
           }
@@ -278,7 +316,6 @@ export class Unit {
       this.executeClassAttack(closestEnemy);
 
       // Saldırı bekleme süresi hesaplama:
-      // Okçu veya Büyücü Seri Atış (Rapid Fire) modundaysa saldırı hızı 5 kat artar (1.0s / 5 = 0.2s)
       if ((this.classType === UnitClasses.ARCHER || this.classType === UnitClasses.MAGE) && this.rapidFireActiveTimer > 0) {
         this.attackCooldown = 0.2; // 5x Saldırı Hızı
       } else {
@@ -287,28 +324,185 @@ export class Unit {
     }
   }
 
-  performEnemyAttack() {
-    const allies = this.party.getAlliedUnits();
-    let closestAlly = null;
-    let minDist = Infinity;
+  /**
+   * Düşman Canavar Davranışı (OpenWorld Gezinme & Standart Saldırı)
+   */
+  performEnemyBehavior(deltaTime) {
+    // 1. Açık Dünya Canavarı ise: Kendi Spawner Bölgesinde Gezinme (Wander) & Bölge Koruma
+    if (this.isOpenWorldMonster && this.homePosition) {
+      this.performOpenWorldMonsterAI(deltaTime);
+      return;
+    }
+
+    // 2. Standart Dalga Modu Canavar Saldırısı
+    if (this.attackCooldown <= 0) {
+      this.performEnemyAttack();
+    }
+  }
+
+  /**
+   * En yüksek tehdit (aggro) üreten canlı oyuncu karakterini seçer.
+   */
+  getHighestAggroTarget(allies) {
+    let highestTarget = null;
+    let maxAggro = -1;
+
+    for (const [unitId, aggro] of this.aggroTable.entries()) {
+      const ally = allies.find(a => a.id === unitId && !a.isDead);
+      if (ally && aggro > maxAggro) {
+        maxAggro = aggro;
+        highestTarget = ally;
+      }
+    }
+
+    return highestTarget;
+  }
+
+  /**
+   * Açık Dünya Canavarı Yapay Zekası:
+   * - En çok aggro üreten oyuncu karakterini hedefler ve kovalar (No Area Limit).
+   * - Hasar almamışken kendi spawner bölgesinde gezinir (Wander).
+   */
+  performOpenWorldMonsterAI(deltaTime) {
+    const allies = this.party.getAlliedUnits().filter(a => !a.isDead);
+    if (allies.length === 0) {
+      this.velocity.mult(0.2);
+      return;
+    }
+
+    // 1. HASAR ALMIŞ / AGGRO OLMUŞ CANAVAR:
+    // Canavar kendisine en çok hasar/tehdit (aggro) üreten oyuncuya saldırır!
+    if (this.isAggroed) {
+      const highestAggroUnit = this.getHighestAggroTarget(allies);
+
+      if (highestAggroUnit) {
+        this.aggroTarget = highestAggroUnit;
+      } else if (!this.aggroTarget || this.aggroTarget.isDead) {
+        let closestAlly = null;
+        let minDistSq = Infinity;
+        allies.forEach(ally => {
+          const dSq = this.position.distSq(ally.position);
+          if (dSq < minDistSq) {
+            minDistSq = dSq;
+            closestAlly = ally;
+          }
+        });
+        this.aggroTarget = closestAlly;
+      }
+
+      if (this.aggroTarget && !this.aggroTarget.isDead) {
+        const dist = this.position.dist(this.aggroTarget.position);
+
+        if (dist <= this.attackRange) {
+          if (this.attackCooldown <= 0) {
+            this.executeClassAttack(this.aggroTarget);
+            this.attackCooldown = 1.0;
+          }
+          this.velocity.mult(0.2);
+        } else {
+          // Alan sınırı olmaksızın en yüksek aggro'ya sahip oyuncuyu kovalar!
+          const dir = Vector2D.sub(this.aggroTarget.position, this.position);
+          dir.normalize();
+          this.velocity = dir.mult(this.speed);
+          this.facingAngle = dir.heading();
+        }
+        return;
+      }
+    }
+
+    // 2. HASAR ALMAMIŞ SAKİN MOD (Bölge koruma & gezinme)
+    let targetAlly = null;
+    let minDist = 300; // Görüş menzili
 
     allies.forEach(ally => {
-      if (!ally.isDead) {
-        const d = this.position.dist(ally.position);
-        if (d < minDist) {
+      const d = this.position.dist(ally.position);
+      if (d < minDist) {
+        if (!this.party.mapManager || this.party.mapManager.hasLineOfSight(this.position, ally.position)) {
           minDist = d;
-          closestAlly = ally;
+          targetAlly = ally;
         }
       }
     });
 
-    if (closestAlly) {
+    const distFromHome = this.position.dist(this.homePosition);
+    if (targetAlly && distFromHome < this.territoryRadius + 150) {
       if (minDist <= this.attackRange) {
-        this.executeClassAttack(closestAlly);
+        if (this.attackCooldown <= 0) {
+          this.executeClassAttack(targetAlly);
+          this.attackCooldown = 1.0;
+        }
+        this.velocity.mult(0.2);
+      } else {
+        const dir = Vector2D.sub(targetAlly.position, this.position);
+        dir.normalize();
+        this.velocity = dir.mult(this.speed);
+        this.facingAngle = dir.heading();
+      }
+      return;
+    }
+
+    // Bölgesine geri dön
+    if (distFromHome > this.territoryRadius) {
+      const returnDir = Vector2D.sub(this.homePosition, this.position);
+      returnDir.normalize();
+      this.velocity = returnDir.mult(this.speed * 0.7);
+      this.facingAngle = returnDir.heading();
+      return;
+    }
+
+    // Sakin Gezinme (Wander)
+    if (this.wanderWaitTimer > 0) {
+      this.wanderWaitTimer -= deltaTime;
+      this.velocity.mult(0.4);
+      return;
+    }
+
+    if (!this.wanderTarget || this.position.dist(this.wanderTarget) < 20) {
+      const angle = Math.random() * Math.PI * 2;
+      const r = Math.random() * (this.territoryRadius * 0.85);
+      const wx = this.homePosition.x + Math.cos(angle) * r;
+      const wy = this.homePosition.y + Math.sin(angle) * r;
+
+      if (!this.party.mapManager || !this.party.mapManager.isPointInsideWall(wx, wy, 20)) {
+        this.wanderTarget = new Vector2D(wx, wy);
+      } else {
+        this.wanderTarget = this.homePosition.clone();
+      }
+      this.wanderWaitTimer = 1.5 + Math.random() * 2.5;
+    } else {
+      const dir = Vector2D.sub(this.wanderTarget, this.position);
+      dir.normalize();
+      this.velocity = dir.mult(this.speed * 0.45);
+      this.facingAngle = dir.heading();
+    }
+  }
+
+  performEnemyAttack() {
+    const allies = this.party.getAlliedUnits().filter(a => !a.isDead);
+    if (allies.length === 0) return;
+
+    let target = this.getHighestAggroTarget(allies);
+    let minDist = Infinity;
+
+    if (!target) {
+      allies.forEach(ally => {
+        const d = this.position.dist(ally.position);
+        if (d < minDist) {
+          minDist = d;
+          target = ally;
+        }
+      });
+    } else {
+      minDist = this.position.dist(target.position);
+    }
+
+    if (target) {
+      if (minDist <= this.attackRange) {
+        this.executeClassAttack(target);
         this.attackCooldown = 1.0;
         this.velocity.mult(0.2);
       } else {
-        const dir = Vector2D.sub(closestAlly.position, this.position);
+        const dir = Vector2D.sub(target.position, this.position);
         dir.normalize();
         this.velocity = dir.mult(this.speed);
         this.facingAngle = dir.heading();
@@ -361,9 +555,18 @@ export class Unit {
   }
 
   moveTo(targetPos) {
-    this.targetPosition = targetPos.clone();
     this.attackTarget = null;
     this.targetInterpolation = null;
+
+    // Duvarların etrafından dolaşan en kısa yol noktalarını (Waypoints) hesapla
+    if (this.party && this.party.mapManager) {
+      this.waypoints = Pathfinder.findPath(this.position, targetPos, this.party.mapManager, this.radius);
+    } else {
+      this.waypoints = [targetPos.clone()];
+    }
+
+    this.targetPosition = this.waypoints.length > 0 ? this.waypoints[0] : targetPos.clone();
+
     if (this.fsm.getStateName() !== 'MOVE') {
       this.fsm.changeState('MOVE');
     }
@@ -396,11 +599,40 @@ export class Unit {
       alpha: 1.0
     });
 
+    // Bir canavar oyuncudan hasar aldığında (Tehdit / Aggro Hesabı):
+    // 1 Hasar = 1 Aggro
+    // Tank / Muhafız (Guardian) karakterler verdikleri hasarın 10 katı (10x) aggro üretir!
+    if (this.isEnemy && sourceUnit && !sourceUnit.isEnemy) {
+      this.isAggroed = true;
+
+      const isTank = (sourceUnit.classType === UnitClasses.GUARDIAN);
+      const aggroGenerated = finalDamage * (isTank ? 10 : 1);
+
+      const currentAggro = (this.aggroTable.get(sourceUnit.id) || 0) + aggroGenerated;
+      this.aggroTable.set(sourceUnit.id, currentAggro);
+
+      // O kamptaki BÜTÜN canavarları anında uyar ve oyuncuya saldırt!
+      if (this.spawnerId && this.party && this.party.enemyUnits) {
+        const campMonsters = this.party.enemyUnits.filter(e => e.spawnerId === this.spawnerId && !e.isDead);
+        campMonsters.forEach(e => {
+          e.isAggroed = true;
+          if (!e.aggroTable.has(sourceUnit.id)) {
+            e.aggroTable.set(sourceUnit.id, aggroGenerated * 0.5);
+          }
+          e.wanderTarget = null;
+          e.wanderWaitTimer = 0;
+        });
+      }
+    }
+
     if (this.hp <= 0) {
       this.hp = 0;
       this.isDead = true;
       this.fsm.changeState('IDLE');
       if (this.party) {
+        if (this.isEnemy && this.party.spawner && typeof this.party.spawner.onMonsterKilled === 'function') {
+          this.party.spawner.onMonsterKilled(this);
+        }
         this.party.checkTeamStatus();
       }
     }
@@ -430,15 +662,26 @@ export class Unit {
       ctx.restore();
     });
 
-    // Şifacı Işını (Healing Beam FX)
+    // Şifacı Işını ve Kendini İyileştirme Halesi (Healing Beam & Self-Heal Aura FX)
     if (this.healBeamTarget && !this.healBeamTarget.isDead && this.healBeamTimer > 0) {
       ctx.save();
-      ctx.strokeStyle = '#2ecc71';
-      ctx.lineWidth = 3 * (this.healBeamTimer / 0.3);
-      ctx.beginPath();
-      ctx.moveTo(this.position.x, this.position.y);
-      ctx.lineTo(this.healBeamTarget.position.x, this.healBeamTarget.position.y);
-      ctx.stroke();
+      const alpha = Math.max(0, this.healBeamTimer / 0.3);
+      if (this.healBeamTarget === this) {
+        ctx.strokeStyle = `rgba(46, 204, 113, ${alpha})`;
+        ctx.fillStyle = `rgba(46, 204, 113, ${alpha * 0.25})`;
+        ctx.lineWidth = 3;
+        ctx.beginPath();
+        ctx.arc(this.position.x, this.position.y, this.radius + 10, 0, Math.PI * 2);
+        ctx.fill();
+        ctx.stroke();
+      } else {
+        ctx.strokeStyle = `rgba(46, 204, 113, ${alpha})`;
+        ctx.lineWidth = 3 * alpha;
+        ctx.beginPath();
+        ctx.moveTo(this.position.x, this.position.y);
+        ctx.lineTo(this.healBeamTarget.position.x, this.healBeamTarget.position.y);
+        ctx.stroke();
+      }
       ctx.restore();
     }
 
@@ -526,21 +769,45 @@ export class Unit {
     }
 
     // Takım Rozeti / Dış Halka
-    ctx.strokeStyle = this.isEnemy ? 'rgba(231, 76, 60, 0.8)' : 'rgba(52, 152, 219, 0.8)';
+    ctx.strokeStyle = this.isEnemy ? (this.color || 'rgba(231, 76, 60, 0.8)') : 'rgba(52, 152, 219, 0.8)';
     ctx.lineWidth = 2.5;
     ctx.beginPath();
     ctx.arc(0, 0, this.radius + 1, 0, Math.PI * 2);
     ctx.stroke();
 
-    // Karakter Gövdesi
-    ctx.fillStyle = this.damageFlash > 0 ? '#ffffff' : this.color;
-    ctx.beginPath();
-    ctx.arc(0, 0, this.radius, 0, Math.PI * 2);
-    ctx.fill();
+    // Canavar Resim Render'ı (Silkroad Monster Sprite)
+    let spriteRendered = false;
+    if (this.isEnemy && this.spriteKey) {
+      const spriteImg = AssetManager.getInstance().getImage(this.spriteKey);
+      if (spriteImg && spriteImg.complete && spriteImg.naturalWidth > 0) {
+        ctx.save();
+        ctx.beginPath();
+        ctx.arc(0, 0, this.radius, 0, Math.PI * 2);
+        ctx.clip();
+        ctx.drawImage(spriteImg, -this.radius, -this.radius, this.radius * 2, this.radius * 2);
+
+        if (this.damageFlash > 0) {
+          ctx.fillStyle = 'rgba(255, 255, 255, 0.7)';
+          ctx.fill();
+        }
+        ctx.restore();
+        spriteRendered = true;
+      }
+    }
+
+    if (!spriteRendered) {
+      // Standart Karakter Gövdesi
+      ctx.fillStyle = this.damageFlash > 0 ? '#ffffff' : this.color;
+      ctx.beginPath();
+      ctx.arc(0, 0, this.radius, 0, Math.PI * 2);
+      ctx.fill();
+    }
 
     // Dış Hat
     ctx.strokeStyle = '#111';
     ctx.lineWidth = 1.5;
+    ctx.beginPath();
+    ctx.arc(0, 0, this.radius, 0, Math.PI * 2);
     ctx.stroke();
 
     // Yön Göstergesi
@@ -555,16 +822,33 @@ export class Unit {
 
     ctx.restore();
 
-    // Can Barı
+    // Can Barı ve İsim/Seviye Etiketi
     this.renderHealthBar(ctx);
   }
 
   renderHealthBar(ctx) {
     if (this.isDead) return;
-    const barWidth = 32;
+    const barWidth = this.isEnemy ? 38 : 32;
     const barHeight = 4;
     const barX = this.position.x - barWidth / 2;
-    const barY = this.position.y - this.radius - 12;
+    const barY = this.position.y - this.radius - 10;
+
+    // Düşman İsim & Seviye Etiketi (Silkroad MMO Stili)
+    if (this.isEnemy && this.name) {
+      ctx.save();
+      ctx.font = 'bold 9px sans-serif';
+      ctx.textAlign = 'center';
+      const labelText = this.monsterLevel ? `[Lv.${this.monsterLevel}] ${this.name}` : this.name;
+      
+      // Yazı arka plan gölgesi
+      ctx.fillStyle = 'rgba(0, 0, 0, 0.8)';
+      const textWidth = ctx.measureText(labelText).width;
+      ctx.fillRect(this.position.x - textWidth / 2 - 3, barY - 14, textWidth + 6, 11);
+
+      ctx.fillStyle = this.color || '#ff4757';
+      ctx.fillText(labelText, this.position.x, barY - 5);
+      ctx.restore();
+    }
 
     // Arka plan
     ctx.fillStyle = 'rgba(0, 0, 0, 0.7)';

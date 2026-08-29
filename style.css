@@ -579,8 +579,33 @@ button.active {
   text-align: center;
 }
 
+.lobby-card.openworld-card {
+  border-color: #2ecc71;
+  background: linear-gradient(145deg, #182823 0%, #151f2b 100%);
+  box-shadow: 0 4px 16px rgba(46, 204, 113, 0.15);
+}
+
+.lobby-card.openworld-card:hover {
+  border-color: #00d2d3;
+  box-shadow: 0 6px 20px rgba(0, 210, 211, 0.25);
+}
+
+.openworld-btn {
+  background: linear-gradient(90deg, #27ae60 0%, #00b894 100%);
+  border-color: #2ecc71;
+  color: #fff;
+  font-weight: 700;
+  font-size: 13px;
+  box-shadow: 0 4px 12px rgba(46, 204, 113, 0.3);
+}
+
+.openworld-btn:hover {
+  background: linear-gradient(90deg, #2ecc71 0%, #00cec9 100%);
+  transform: translateY(-1px);
+}
+
 .lobby-card.solo-card {
-  grid-column: span 2;
+  border-color: #34495e;
 }
 
 .lobby-icon {

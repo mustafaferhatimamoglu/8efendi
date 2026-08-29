@@ -1,9 +1,10 @@
 import { Vector2D } from '../navigation/Vector2D.js';
 
 export class InputManager {
-  constructor(canvas, partyManager) {
+  constructor(canvas, partyManager, camera = null) {
     this.canvas = canvas;
     this.party = partyManager;
+    this.camera = camera;
 
     // Sol Tık: Seçim & Kutu Seçimi (Box Select)
     this.isLeftDragging = false;
@@ -20,39 +21,61 @@ export class InputManager {
     this.bindEvents();
   }
 
+  setCamera(camera) {
+    this.camera = camera;
+  }
+
+  getEventWorldPos(e) {
+    const rect = this.canvas.getBoundingClientRect();
+    const scaleX = this.canvas.width / (rect.width || 1);
+    const scaleY = this.canvas.height / (rect.height || 1);
+    const screenX = (e.clientX - rect.left) * scaleX;
+    const screenY = (e.clientY - rect.top) * scaleY;
+    const screenPos = new Vector2D(screenX, screenY);
+    if (this.camera && this.camera.active) {
+      return this.camera.screenToWorld(screenPos);
+    }
+    return screenPos;
+  }
+
   bindEvents() {
     this.canvas.addEventListener('contextmenu', e => e.preventDefault());
 
+    // Fare Tekerleği ile Kamera Yakınlaştırma / Uzaklaştırma (Zoom In / Zoom Out)
+    this.canvas.addEventListener('wheel', e => {
+      e.preventDefault();
+      if (this.camera && this.camera.active) {
+        const delta = e.deltaY < 0 ? 0.12 : -0.12;
+        this.camera.adjustZoom(delta);
+      }
+    }, { passive: false });
+
     this.canvas.addEventListener('mousedown', e => {
-      const rect = this.canvas.getBoundingClientRect();
-      const mouseX = e.clientX - rect.left;
-      const mouseY = e.clientY - rect.top;
-      this.mousePos.set(mouseX, mouseY);
+      const worldPos = this.getEventWorldPos(e);
+      this.mousePos.set(worldPos.x, worldPos.y);
 
       if (e.button === 0) {
         // Sol tık - Kutu Seçimi Başlangıcı
         this.isLeftDragging = true;
-        this.leftDragStart.set(mouseX, mouseY);
-        this.leftDragEnd.set(mouseX, mouseY);
+        this.leftDragStart.set(worldPos.x, worldPos.y);
+        this.leftDragEnd.set(worldPos.x, worldPos.y);
       } else if (e.button === 2) {
         // Sağ tık - Formasyon Yönlendirme / Hedefe Hareket Başlangıcı
         this.isRightDragging = true;
-        this.rightDragStart.set(mouseX, mouseY);
-        this.rightDragEnd.set(mouseX, mouseY);
+        this.rightDragStart.set(worldPos.x, worldPos.y);
+        this.rightDragEnd.set(worldPos.x, worldPos.y);
       }
     });
 
     window.addEventListener('mousemove', e => {
-      const rect = this.canvas.getBoundingClientRect();
-      const mouseX = e.clientX - rect.left;
-      const mouseY = e.clientY - rect.top;
-      this.mousePos.set(mouseX, mouseY);
+      const worldPos = this.getEventWorldPos(e);
+      this.mousePos.set(worldPos.x, worldPos.y);
 
       if (this.isLeftDragging) {
-        this.leftDragEnd.set(mouseX, mouseY);
+        this.leftDragEnd.set(worldPos.x, worldPos.y);
       }
       if (this.isRightDragging) {
-        this.rightDragEnd.set(mouseX, mouseY);
+        this.rightDragEnd.set(worldPos.x, worldPos.y);
       }
 
       // Düşman hedefleme hover imleci

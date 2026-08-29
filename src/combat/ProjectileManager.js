@@ -1,4 +1,4 @@
-﻿import { Vector2D } from '../navigation/Vector2D.js';
+import { Vector2D } from '../navigation/Vector2D.js';
 
 export class Projectile {
   constructor(config) {
@@ -25,7 +25,7 @@ export class Projectile {
     this.velocity = dir.mult(this.speed);
   }
 
-  update(deltaTime) {
+  update(deltaTime, partyManager = null) {
     if (this.isDead) return;
 
     this.lifeTime -= deltaTime;
@@ -34,26 +34,105 @@ export class Projectile {
       return;
     }
 
-    // Hedefi takip et (homing)
+    // Hedefi takip et (homing) - Hedef hala canlı ise hedefe yönel
     if (this.targetUnit && !this.targetUnit.isDead) {
       const desired = Vector2D.sub(this.targetUnit.position, this.position);
       const dist = desired.mag();
 
-      // Çarpışma kontrolü
-      if (dist <= this.targetUnit.radius + this.radius + 4) {
-        this.hitTarget(this.targetUnit);
-        return;
+      if (dist > 0.0001) {
+        desired.normalize();
+        desired.mult(this.speed);
+        // Yumuşak yönelme
+        this.velocity.x += (desired.x - this.velocity.x) * 0.2;
+        this.velocity.y += (desired.y - this.velocity.y) * 0.2;
       }
-
-      desired.normalize();
-      desired.mult(this.speed);
-      // Yumuşak yönelme
-      this.velocity.x += (desired.x - this.velocity.x) * 0.15;
-      this.velocity.y += (desired.y - this.velocity.y) * 0.15;
+    } else {
+      // Hedef öldüyse veya yoksa takibi bırak, mevcut rotasında dümdüz uçmaya devam et
+      this.targetUnit = null;
     }
 
-    this.position.x += this.velocity.x * deltaTime;
-    this.position.y += this.velocity.y * deltaTime;
+    // Hız büyüklüğünü sabit tut
+    const currentSpeed = this.velocity.mag();
+    if (currentSpeed > 0.0001) {
+      this.velocity.x = (this.velocity.x / currentSpeed) * this.speed;
+      this.velocity.y = (this.velocity.y / currentSpeed) * this.speed;
+    }
+
+    const prevPos = this.position.clone();
+    const nextPos = new Vector2D(
+      this.position.x + this.velocity.x * deltaTime,
+      this.position.y + this.velocity.y * deltaTime
+    );
+
+    // 1. Duvar Çarpışması Kontrolü (Mermiler duvardan geçemez!)
+    const mapManager = partyManager ? partyManager.mapManager : null;
+    if (mapManager) {
+      const wallHit = mapManager.checkProjectileWallHit(prevPos, nextPos);
+      if (wallHit) {
+        this.position.set(wallHit.x, wallHit.y);
+        this.hitWall();
+        return;
+      }
+    }
+
+    // 2. DÜŞMAN ÇARPIŞMA KONTROLÜ
+    // Hedef ölmüş olsa dahi rota üzerinde karşılaşılan ilk geçerli düşmana çarpar ve hasar verir!
+    if (partyManager) {
+      const isSourceEnemy = this.sourceUnit && this.sourceUnit.isEnemy;
+      const potentialTargets = isSourceEnemy
+        ? partyManager.getAlliedUnits()
+        : partyManager.getEnemyUnits();
+
+      let hitTargetUnit = null;
+      let closestDistSq = Infinity;
+
+      for (const enemy of potentialTargets) {
+        if (!enemy || enemy.isDead || enemy === this.sourceUnit) continue;
+
+        const hitRadius = enemy.radius + this.radius + 6;
+        const d = this.distToSegment(enemy.position, prevPos, nextPos);
+
+        if (d <= hitRadius) {
+          const dxStart = prevPos.x - enemy.position.x;
+          const dyStart = prevPos.y - enemy.position.y;
+          const distFromStart = dxStart * dxStart + dyStart * dyStart;
+          if (distFromStart < closestDistSq) {
+            closestDistSq = distFromStart;
+            hitTargetUnit = enemy;
+          }
+        }
+      }
+
+      if (hitTargetUnit) {
+        this.position.set(nextPos.x, nextPos.y);
+        this.hitTarget(hitTargetUnit);
+        return;
+      }
+    }
+
+    this.position.set(nextPos.x, nextPos.y);
+  }
+
+  distToSegment(p, v, w) {
+    const dxVW = w.x - v.x;
+    const dyVW = w.y - v.y;
+    const l2 = dxVW * dxVW + dyVW * dyVW;
+    if (l2 === 0) {
+      const dx = p.x - v.x;
+      const dy = p.y - v.y;
+      return Math.sqrt(dx * dx + dy * dy);
+    }
+    let t = ((p.x - v.x) * dxVW + (p.y - v.y) * dyVW) / l2;
+    t = Math.max(0, Math.min(1, t));
+    const projX = v.x + t * dxVW;
+    const projY = v.y + t * dyVW;
+    const dx = p.x - projX;
+    const dy = p.y - projY;
+    return Math.sqrt(dx * dx + dy * dy);
+  }
+
+  hitWall() {
+    this.isDead = true;
   }
 
   hitTarget(target) {
@@ -155,10 +234,10 @@ export class ProjectileManager {
     }));
   }
 
-  update(deltaTime) {
+  update(deltaTime, partyManager = null) {
     for (let i = this.projectiles.length - 1; i >= 0; i--) {
       const p = this.projectiles[i];
-      p.update(deltaTime);
+      p.update(deltaTime, partyManager);
       if (p.isDead) {
         this.projectiles.splice(i, 1);
       }
